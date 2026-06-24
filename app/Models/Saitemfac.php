@@ -15,7 +15,8 @@ class Saitemfac extends Model
         'costodoriginal','esserv','fk_sucursal','compraprov' ];
 
     public function factura  (){
-        return $this->belongsTo(Safact::class, 'numerod', 'numerod')->whereTipofac('Safact.tipofac')->whereNumerod('Safact.numerod');
+        return $this->belongsTo(Safact::class, 'NumeroD', 'NumeroD')
+            ->whereColumn('TipoFac', 'safact.TipoFac');
     }
 
     public function producto  (){
