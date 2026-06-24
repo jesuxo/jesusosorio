@@ -177,10 +177,6 @@
                                     <a href="/clientes" class="nav-link" data-key="t-list-view">Buscar Cliente</a>
                                 </li>
 
-                                <li class="nav-item">
-                                    <a href="/financiamientos" class="nav-link" data-key="t-list-view">Financiamientos</a>
-                                </li>
-
                                 @if(Auth::user()  and auth()->user()->can('menu_cxc') )
                                     <li class="nav-item"  >
                                         <a href="/cxc" class="nav-link" data-key="t-list-view">Cuentas x Cobrar</a>
