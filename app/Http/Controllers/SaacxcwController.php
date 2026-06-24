@@ -154,18 +154,7 @@ class SaacxcwController extends Controller
                 (c.montodolares) AS credito,
                 (c.montodolares - (c.saldo / c.tasadolar)) AS abonado,
                 a.codclie,
-                (c.saldo / c.tasadolar) AS saldo,
-                (IFNULL(
-                    (select sum(totalmontodivisa)
-                    from safact g
-                    where g.codclie='$codclie'
-                    and g.numerod= c.numerod
-                    and c.tipocxc = '10'
-                    and g.fk_sucursal= c.fk_sucursal
-                    and g.codclie = a.codclie
-                    and g.tipofac = 'A'
-                    ) * ((c.saldo/c.tasadolar)/c.montodolares)
-                ,0)) as saldodivisa
+                (c.saldo / c.tasadolar) AS saldo
             FROM saclie AS a
             JOIN saacxcw AS c ON c.codclie = a.codclie
             JOIN sasucursal AS d ON d.id = c.fk_sucursal
@@ -185,8 +174,7 @@ class SaacxcwController extends Controller
                 (c.montodolares) AS credito,
                 (c.montodolares - (c.saldo / c.tasadolar)) AS abonado,
                 a.codclie,
-                (c.saldo / c.tasadolar) AS saldo,
-                0 as saldodivisa
+                (c.saldo / c.tasadolar) AS saldo
             FROM saclie AS a
             JOIN saacxcw AS c ON c.codclie = a.codclie
             JOIN sasucursal AS d ON d.id = c.fk_sucursal
@@ -429,18 +417,7 @@ class SaacxcwController extends Controller
                                                          (c.montodolares) AS credito,
                                                          (c.montodolares - (c.saldo / c.tasadolar)) AS abonado,
                                                         a.codclie,
-                                                         (c.saldo / c.tasadolar) AS saldo,
-                                                          (IFNULL(
-                                                         ((  select sum(totalmontodivisa)
-                                                            from safact g
-                                                            where g.codclie='$codclie'
-                                                            and g.numerod= c.numerod
-                                                            and c.tipocxc = '10'
-                                                            and g.fk_sucursal= c.fk_sucursal
-                                                            and g.codclie = a.codclie
-                                                            and g.tipofac = 'A'
-                                                        )* ((c.saldo/c.tasadolar)/c.montodolares))
-                                                    ,0)) as saldodivisa
+                                                         (c.saldo / c.tasadolar) AS saldo
                                                     FROM
                                                         saclie AS a
                                                     JOIN
@@ -468,8 +445,7 @@ class SaacxcwController extends Controller
                                                          (c.montodolares) AS credito,
                                                          (c.montodolares - (c.saldo / c.tasadolar)) AS abonado,
                                                         a.codclie,
-                                                         (c.saldo / c.tasadolar) AS saldo,
-                                                         0 as saldodivisa
+                                                         (c.saldo / c.tasadolar) AS saldo
                                                     FROM
                                                         saclie AS a
                                                     JOIN

@@ -234,18 +234,7 @@
                                             COUNT(*) AS cant,
                                             SUM(c.montodolares) AS credito,
                                             SUM(c.montodolares - (c.saldo / c.tasadolar)) AS abonado,
-                                            SUM(c.saldo / c.tasadolar) AS saldo,
-                                            sum(IFNULL(
-                                                (select sum(totalmontodivisa)
-                                                 from safact g
-                                                 where g.fk_sucursal = ".$sucu->id."
-                                                 and g.numerod = c.numerod
-                                                 and c.tipocxc = '10'
-                                                 and g.fk_sucursal = c.fk_sucursal
-                                                 and g.codclie = a.codclie
-                                                 and g.tipofac = 'A'
-                                                ) * ((c.saldo/c.tasadolar)/c.montodolares), 0
-                                            )) as saldodivisa
+                                            SUM(c.saldo / c.tasadolar) AS saldo
                                         FROM saclie AS a
                                         JOIN saacxcw AS c ON c.codclie = a.codclie
                                         WHERE c.Saldo > 10
@@ -260,7 +249,6 @@
                                         $nn++;
                                         $tcanti += $saldocxc[0]->cant;
                                         $tmonto += $saldocxc[0]->saldo;
-                                        $tdivis += $saldocxc[0]->saldodivisa;
                                 @endphp
                                 <tr>
                                     <td>
@@ -276,9 +264,6 @@
                                     </td>
                                     <td class="text-end text-danger fw-bold">
                                         {{ number_format($saldocxc[0]->saldo, 2, ',', '.') }}
-                                    </td>
-                                    <td class="text-end text-primary fw-bold">
-                                        {{ number_format($saldocxc[0]->saldodivisa, 2, ',', '.') }}
                                     </td>
                                 </tr>
                                 @php } @endphp
@@ -415,18 +400,7 @@
                                     SUM(c.montodolares) AS credito,
                                     SUM(c.montodolares - (c.saldo / c.tasadolar)) AS abonado,
                                     a.codclie,
-                                    SUM(c.saldo / c.tasadolar) AS saldo,
-                                    sum(IFNULL(
-                                        (select sum(totalmontodivisa)
-                                         from safact g
-                                         where g.fk_sucursal = ".$sucursalselected->id."
-                                         and g.numerod = c.numerod
-                                         and c.tipocxc = '10'
-                                         and g.fk_sucursal = c.fk_sucursal
-                                         and g.codclie = a.codclie
-                                         and g.tipofac = 'A'
-                                        ) * ((c.saldo/c.tasadolar)/c.montodolares), 0
-                                    )) as saldodivisa
+                                    SUM(c.saldo / c.tasadolar) AS saldo
                                 FROM saclie AS a
                                 JOIN saacxcw AS c ON c.codclie = a.codclie
                                 WHERE c.Saldo > 10
@@ -458,7 +432,6 @@
                                     <th class="text-center">  Facturas</th>
                                     <th class="text-end">  Facturado</th>
                                     <th class="text-end">  Abonado</th>
-                                    <th class="text-end"> Saldo Bs</th>
                                     <th class="text-end">  Saldo USD</th>
                                     <th class="text-center">  Acción</th>
                                 </tr>
@@ -469,7 +442,6 @@
                                         $tmonto += $cxc->credito;
                                         $tabona += $cxc->abonado;
                                         $tsaldo += $cxc->saldo;
-                                        $tdivis += $cxc->saldodivisa;
                                     @endphp
                                     <tr class="cliente-row" data-cliente="{{ strtolower($cxc->cliente) }}" data-codclie="{{ $cxc->codclie }}">
                                         <td>
@@ -485,7 +457,6 @@
                                         <td class="text-end"> {{ number_format($cxc->credito, 2, ',', '.') }}</td>
                                         <td class="text-end text-success"> {{ number_format($cxc->abonado, 2, ',', '.') }}</td>
                                         <td class="text-end text-danger fw-bold">{{ number_format($cxc->saldo, 2, ',', '.') }}</td>
-                                        <td class="text-end text-primary fw-bold"> {{ number_format($cxc->saldodivisa, 2, ',', '.') }}</td>
                                         <td class="text-center">
                                             <button type="button"
                                                     class="btn btn-sm btn-outline-info cxcmodal"
@@ -509,8 +480,7 @@
                                         <td class="text-end">{{ number_format($tmonto, 2, ',', '.') }}</td>
                                         <td class="text-end text-success">{{ number_format($tabona, 2, ',', '.') }}</td>
                                         <td class="text-end text-danger fw-bold">{{ number_format($tsaldo, 2, ',', '.') }}</td>
-                                        <td class="text-end text-primary fw-bold">{{ number_format($tdivis, 2, ',', '.') }}</td>
-                                        <td class="text-center"></td>
+                                         <td class="text-center"></td>
                                     </tr>
                                     </tfoot>
                                 @endif

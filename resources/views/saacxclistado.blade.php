@@ -15,7 +15,6 @@
                                     <th width="11%" align="center" class="tdlineff">NUMERO</th>
                                     <th width="11%" align="center" class="tdlineff">FACTURADO</th>
                                     <th width="11%" align="center" class="tdlineff">ABONADO</th>
-                                    <th width="11%" align="center" class="tdlineff">SALDO Bs</th>
                                     <th width="11%" align="center" class="tdlineff">SALDO USD</th>
                                 </tr>
                                 </thead>
@@ -30,7 +29,6 @@
                                         $tmonto += $cxc->credito;
                                         $tabona += $cxc->abonado;
                                         $tsaldo += $cxc->saldo;
-                                        $tdivis += $cxc->saldodivisa;
                                     @endphp
                                     <tr @php if(($nn%2)==0){echo 'bgcolor="#eee"'; }else{echo 'bgcolor="#fff"';} @endphp>
                                         <td height="30" align="left" class="tdline">{{$cxc->cliente}} - {{$cxc->sucursal}}</td>
@@ -54,7 +52,7 @@
                                                             data-nrounico  = "{{ $cxc->nrounico }}"
                                                             data-fksucu    = "{{ $cxc->fk_sucursal ?? '' }}"
                                                             data-saldo     = "{{ $cxc->saldo }}"
-                                                            data-saldo-usd = "{{ $cxc->saldodivisa }}"
+                                                            data-saldo-usd = "0"
                                                             data-bs-toggle = "modal"
                                                             data-bs-target = "#descuentoModal">
                                                         <i class="bi bi-list-ul"></i>
@@ -67,7 +65,6 @@
                                         <td align="right" class="tdline">{{($cxc->credito != 0 )? number_format( $cxc->credito ,2,',','.').'  ' : ''}}</td>
                                         <td align="right" class="tdline">{{($cxc->abonado != 0 )? number_format( $cxc->abonado ,2,',','.').'  ' : ''}}</td>
                                         <td align="right" class="tdline">{{($cxc->saldo != 0 )? number_format($cxc->saldo,2,',','.'):''}}</td>
-                                        <td align="right" class="tdline">{{($cxc->saldodivisa != 0 )? number_format($cxc->saldodivisa,2,',','.'):''}}</td>
                                     </tr>
                                 @endforeach
                                 </tbody>
@@ -92,7 +89,6 @@
                                     <td align="right" class="tdline fw-bold text-danger">{{($tsaldo != 0)? number_format($tsaldo ,2,',','.') : ''}}
                                         <input type="hidden" id="tsaldolistaod" value="{{($tsaldo != 0)? number_format($tsaldo+0,2,'.','') : ''}}">
                                     </td>
-                                    <td align="right" class="tdline fw-bold text-primary">{{($tdivis != 0)? number_format($tdivis ,2,',','.') : ''}}</td>
                                 </tr>
                                 </tfoot>
                             </table>
