@@ -222,9 +222,7 @@
 
                             <th>  Sucursal</th>
                             <th class="text-center">  Facturas</th>
-                            <th class="text-center">    Bs</th>
                             <th class="text-center">    USD</th>
-
                             </thead>
                             <tbody>
                             @foreach($sucursales as $index => $sucu)
@@ -275,7 +273,6 @@
                                     <td class="fw-bold">TOTAL GENERAL</td>
                                     <td class="text-center fw-bold">{{ number_format($tcanti, 0, ',', '.') }}</td>
                                     <td class="text-end fw-bold text-danger"> {{ number_format($tmonto, 2, ',', '.') }}</td>
-                                    <td class="text-end fw-bold text-primary"> {{ number_format($tdivis, 2, ',', '.') }}</td>
                                 </tr>
                                 </tfoot>
                             @endif
