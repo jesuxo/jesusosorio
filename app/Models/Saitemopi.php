@@ -1,0 +1,30 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Saitemopi extends Model
+{
+    use HasFactory;
+    protected $table    = 'saitemopi';
+    protected $fillable = [  'tipoopi', 'NumeroD', 'NroLinea', 'NroLineaC', 'CodItem', 'CodUbic', 'CodUbic2', 'Descrip1',
+        'Refere', 'Signo',  'Cantidad',  'ExistAnt',  'ExistAnt2', 'CantidadC', 'Costo', 'TotalItem', 'Precio',  'FechaE',
+            'FechaL', 'FechaV', 'EsServ', 'EsUnid', 'EsExento',  'DEsSeri',   'preciod', 'fk_sucursal', 'compraprov' ];
+
+    public function operacion  (){
+        return $this->belongsTo(Safact::class, 'NumeroD', 'NumeroD')
+            ->whereTipofac('Saopei.tipoopi')->whereNumerod('Saopei.NumeroD');
+    }
+
+    public function producto  (){
+
+        return $this->belongsTo(Saprod::class, 'coditem', 'codprod');
+    }
+
+    public function sucursal  (){
+        return $this->belongsTo(Sasucursal::class, 'fk_sucursal', 'id');
+    }
+
+}
