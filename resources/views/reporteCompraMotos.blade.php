@@ -365,7 +365,7 @@
                 <div class="card mt-3">
                     <div class="card-header bg-primary text-white">
                         <h5 class="card-title mb-0">
-                            <i class="bi bi-funnel"></i> Filtrar por Modelo
+                            <i class="bi bi-funnel"></i> Marcas compradas
                         </h5>
                     </div>
                     <div class="card-body">
