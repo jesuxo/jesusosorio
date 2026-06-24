@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Saacxc;
+use App\Models\Saacxcw;
 use App\Models\Saclie;
 use App\Models\Sacliesucursal;
 use App\Models\Safact;
@@ -167,10 +167,10 @@ class SaclieController extends Controller
 
             if($tab == 'tab2'){
 
-                    $cobranzas = Saacxc::selectRaw(" codusua, dolar_tranf as transf, dolares, codclie,
-                 (cancele - (dolares*tasadolar)) as cancele, document, nrounico, euros,cancelausd, monto,
-                 (cancelt - (dolar_tranf*tasadolar)) as cancelt,  tasadolar, pesos, peso_tranf, tasapeso,
-                 date_format(FechaT, '%d/%m/%Y') as fecha, codvend,  numerod, tipocxc, montodolares, fk_sucursal")
+                $cobranzas = Saacxcw::selectRaw(" codusua, dolar_tranf as transf, dolares, codclie,
+                     (cancele - (dolares*tasadolar)) as cancele, document, nrounico, euros,cancelausd, monto,
+                     (cancelt - (dolar_tranf*tasadolar)) as cancelt,  tasadolar, pesos, peso_tranf, tasapeso,
+                     date_format(FechaT, '%d/%m/%Y') as fecha, codvend,  numerod, tipocxc, montodolares, fk_sucursal")
                     ->with([ 'cliente', 'sucursalcli'])
                     ->whereRaw("codclie = '$codclie' and montodolares >0")
                     ->orderBy('fechat','asc')
