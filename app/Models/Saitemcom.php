@@ -16,7 +16,8 @@ class Saitemcom extends Model
         'result', 'precioanterior', 'costoanterior', 'costoorig', 'porc1', 'porc2', 'porc3', 'fk_sucursal' ];
 
     public function compra  (){
-        return $this->belongsTo(Sacomp::class, 'numerod', 'numerod')->whereTipocom('Sacomp.tipocom')->whereNumerod('Sacomp.numerod');
+        return $this->belongsTo(Sacomp::class, 'numerod', 'numerod')
+            ->whereColumn('tipocom', 'sacomp.tipocom');
     }
 
     public function producto  (){
