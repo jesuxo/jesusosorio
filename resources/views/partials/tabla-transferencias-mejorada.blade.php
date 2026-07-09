@@ -19,7 +19,7 @@
             </div>
         </div>
 
-        <div class="table-responsive table-card tabla-container" style="overflow-x: auto; max-width: 100%;">
+        <div class="table-responsive table-card tabla-container" style="overflow-x: auto; max-width: 100%; min-height: 500px !important;">
             <div style="min-width: 1400px;">
                 <table width="100%" class="table table-nowrap align-middle">
                     <thead>
