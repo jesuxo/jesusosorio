@@ -110,12 +110,13 @@ Route::group([ 'middleware' => 'check.user'], function () {
         Route::post('newsaexis/sync/exist', 'newexistencias');
     });
 
-    Route::controller(\App\Http\Controllers\SaacxcController::class)->group(function () {
-        Route::post('saacxc/sync/cxc', 'cuentaxcobrar');
-    });
-
     Route::controller(\App\Http\Controllers\SaacxcwController::class)->group(function () {
         Route::post('saacxcw/sync/cxc', 'cuentaxcobrar');
+        Route::post('saacxcw/sync/descargar' , 'descargar');
+        Route::post('saacxcw/sync/descargado', 'descargado');
+
+        Route::post('saacxcw/sync/descuento/descargar' , 'descargarDescuento');
+        Route::post('saacxcw/sync/descuento/descargado', 'descargadoDescuento');
     });
 
     Route::resource('saesta', \App\Http\Controllers\SaestaController::class);

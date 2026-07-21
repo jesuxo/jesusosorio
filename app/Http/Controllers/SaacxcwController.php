@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Saacxcw;
-use App\Models\Saipacxc;
 use App\Models\Saipacxcw;
 use App\Models\Sapagcxcw;
 use App\Models\Sasucursal;
@@ -351,6 +350,223 @@ class SaacxcwController extends Controller
             ], 500);
         }
     }
+
+    public function descargar(Request $request)
+    {
+        $sucursalid = str_replace("300", "", $request->sucursal);
+        $comercialid = session('comercialid');
+
+        // Buscar pagos pendientes de descargar (tipo 99 que aún no han sido procesados)
+        $saacxcw = Saacxcw::selectRaw('id, montodolares, fk_sucursal, codclie,
+                                  CancelE, CancelT, dolares, dolar_tranf, pesos, peso_tranf, euros,
+                                  tasadolar, tasapeso')
+            ->whereRaw("descargar = 1 AND tipocxc = 99 AND montodolares > 0 AND fk_sucursal = $sucursalid")
+            ->first();
+
+        $auxsaacxc = [];
+
+        if ($saacxcw) {
+            // Obtener los instrumentos de pago asociados a este pago
+            $instrumentos = DB::table('saipacxcw')
+                ->where('NroPpal', $saacxcw->id)
+                ->select('CodPago', 'Descrip', 'Monto', 'dolares', 'pesos')
+                ->get();
+
+            $auxsaacxc['saacxc'][] = [
+                'id'            => $saacxcw->id,
+                'montodolares'  => $saacxcw->montodolares,
+                'fk_sucursal'   => $saacxcw->fk_sucursal,
+                'codclie'       => $saacxcw->codclie,
+                // Datos del pago desglosado
+                'cancele'       => $saacxcw->CancelE,      // Efectivo Bs
+                'cancelt'       => $saacxcw->CancelT,      // Transferencias Bs (instrumentos)
+                'dolares'       => $saacxcw->dolares,      // Efectivo USD
+                'dolar_tranf'   => $saacxcw->dolar_tranf,  // Transferencias USD
+                'pesos'         => $saacxcw->pesos,        // Efectivo COP
+                'peso_tranf'    => $saacxcw->peso_tranf,   // Transferencias COP
+                'euros'         => $saacxcw->euros,        // Efectivo EUR
+                'tasadolar'     => $saacxcw->tasadolar,    // Tasa Bs/USD
+                'tasa_peso'     => $saacxcw->tasapeso,     // Tasa COP/USD
+                'instrumentos'  => $instrumentos
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'auxsaacxc' => $auxsaacxc
+        ]);
+    }
+
+    public function descargadoDescuento(Request $request)
+    {
+        $sucursalid = str_replace("300","",$request->sucursal);
+        $idcxc = $request->idcxc;
+
+        $saacxcw = Saacxcw::find($idcxc);
+        if(isset($saacxcw)){
+            $saacxcw->descargar = 2;
+            $saacxcw->save();
+        }
+
+        return response()->json(['success' => 'success', 'updated' => 1], 200);
+    }
+
+    public function descargado(Request $request)
+    {
+        $sucursalid = str_replace("300","",$request->sucursal);
+        $idcxc = $request->idcxc;
+
+        $saacxcw = Saacxcw::find($idcxc);
+        if(isset($saacxcw)){
+            $saacxcw->descargar = 2;
+            $saacxcw->save();
+        }
+
+        return response()->json(['success' => 'success', 'updated' => 1], 200);
+    }
+
+    public function descargarDescuento(Request $request)
+    {
+        $sucursalid = str_replace("300", "", $request->sucursal);
+        $comercialid = session('comercialid');
+
+        // Buscar pagos pendientes de descargar (tipo 99 que aún no han sido procesados)
+        $saacxcw = Saacxcw::selectRaw('id, montodolares, fk_sucursal, codclie, numeron, NroRegi as nrounico, codesta, document, notas1, notas2')
+            ->whereRaw("descargar = 1 AND tipocxc = 98 AND montodolares > 0 AND fk_sucursal = $sucursalid")
+            ->first();
+
+        $auxsaacxc = [];
+
+        if ($saacxcw) {
+
+            $cxc = DB::selectOne("
+                                SELECT c.tipocxc, a.descrip as cliente
+                                FROM saacxc c
+                                JOIN saclie a ON a.codclie = c.CodClie
+                                WHERE c.nrounico        = $saacxcw->nrounico
+                                      AND c.fk_sucursal = $saacxcw->fk_sucursal
+                                      AND c.Saldo       > 10
+            ");
+
+            $auxsaacxc['saacxc'][] = [
+                'id'            => $saacxcw->id,
+                'montodolares'  => $saacxcw->montodolares,
+                'fk_sucursal'   => $saacxcw->fk_sucursal,
+                'codclie'       => $saacxcw->codclie,
+                'nrounico'      => $saacxcw->nrounico,
+                'numeron'       => $saacxcw->numeron,
+                'document'      => $saacxcw->document,
+                'notas1'        => $saacxcw->notas1,
+                'notas2'        => $saacxcw->notas2,
+                'tipocxc'       => $cxc->tipocxc
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'auxsaacxc' => $auxsaacxc
+        ]);
+    }
+
+    public function aplicarDescuento(Request $request)
+    {
+        try {
+            $numerod        = $request->numerod;
+            $nrounico       = $request->nrounico;
+            $fksucu         = $request->fksucu;
+            $montoDescuento = floatval($request->monto);
+            $motivo         = $request->motivo;
+            $tasaBs         = 1; // Obtener tasa actual
+
+            $factura = DB::selectOne("
+                                SELECT c.*, a.descrip as cliente
+                                FROM saacxcw c
+                                JOIN saclie a ON a.codclie = c.CodClie
+                                WHERE c.nrounico        = $nrounico
+                                      AND c.fk_sucursal = $fksucu
+                                      AND c.Saldo       > 10
+        ");
+
+            if (!$factura) {
+                return response()->json(['success' => false, 'message' => 'Factura no encontrada o ya está pagada'], 404);
+            }
+
+            $saldoActualUSD = $factura->Saldo / $factura->tasadolar;
+
+            if ($montoDescuento > $saldoActualUSD) {
+                return response()->json(['success' => false, 'message' => 'El descuento no puede exceder el saldo de la factura'], 400);
+            }
+
+            // Crear registro de descuento (tipo 98 para descuentos)
+            $descuento = new Saacxcw();
+            $descuento->tipocxc     = 98;  // Tipo 98 para descuentos/devoluciones
+            $descuento->nrounico    = 0;
+            $descuento->NroRegi     = $nrounico;
+            $descuento->codesta     = 'web';
+            $descuento->CodUsua     = 'web';
+            $descuento->NumeroD     = 'web';
+            $descuento->NumeroN     = $numerod;
+            $descuento->codoper     = 'web';
+            $descuento->codclie     = $factura->CodClie;
+            $descuento->codvend     = '01';
+            $descuento->document    = substr($motivo, 0, 40);
+            $descuento->Notas1      = substr($motivo, 40, 60);
+            $descuento->Notas2      = "Descuento factura: $numerod";
+            $descuento->Notas3      = '';
+            $descuento->descargar   = 1;
+            $descuento->EsUnPago    = 0;  // No es un pago, es un descuento
+            $descuento->xdev        = 1;  // Marcar como devolución/descuento
+            $descuento->fk_transaccion = 0;
+
+            // Montos en Bs
+            $montoBs                = $montoDescuento;
+            $descuento->Monto       = $montoBs;        // Negativo porque es un descuento
+            $descuento->MontoNeto   = $montoBs;
+            $descuento->MtoTax      = 0;
+            $descuento->Saldo       = 0;
+            $descuento->SaldoOrg    = 0;
+            $descuento->BaseImpo    = 0;
+            $descuento->TExento     = $montoBs;
+
+            // El descuento se aplica como un "abono negativo"
+            $descuento->CancelE     = 0;
+            $descuento->dolares     = 0;
+
+            $descuento->CancelT     = 0;
+            $descuento->dolar_tranf = 0;
+            $descuento->pesos       = 0;
+            $descuento->peso_tranf  = 0;
+            $descuento->euros       = 0;
+            $descuento->CancelA     = 0;
+            $descuento->CancelC     = 0;
+
+            $descuento->tasadolar    = 0;
+            $descuento->tasapeso     = 0;
+            $descuento->tasaeuro     = 0;
+            $descuento->cancelaUSD   = 0;
+            $descuento->montodolares = $montoDescuento;
+            $descuento->fk_sucursal  = $fksucu;
+            $descuento->FechaI       = Carbon::now();
+            $descuento->FechaE       = Carbon::now();
+            $descuento->FechaT       = Carbon::now();
+            $descuento->FechaV       = Carbon::now();
+            $descuento->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Descuento aplicado correctamente',
+                'monto'   => $montoDescuento,
+                'factura' => $numerod
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function getInstrumentosPago(Request $request)
     {
         $comercial = session('comercialid');
@@ -481,7 +697,7 @@ class SaacxcwController extends Controller
             $montoParaSucursal = round($montoTotalInstrumentosSucursal * $porcentajeInstrumento, 2);
 
             if ($montoParaSucursal > 0) {
-                $saipacxc = new Saipacxc();
+                $saipacxc = new Saipacxcw();
                 $saipacxc->NroPpal = $pagoId;
                 $saipacxc->NroUnico = 0;
                 $saipacxc->CodPago = $inst['cod_pago'];
@@ -598,22 +814,22 @@ class SaacxcwController extends Controller
         //
     }
 
-    public function show(Saacxcw $saacxcw)
+    public function show(Saacxcw $saacxcww)
     {
         //
     }
 
-    public function edit(Saacxcw $saacxcw)
+    public function edit(Saacxcw $saacxcww)
     {
         //
     }
 
-    public function update(Request $request, Saacxcw $saacxcw)
+    public function update(Request $request, Saacxcw $saacxcww)
     {
         //
     }
 
-    public function destroy(Saacxcw $saacxcw)
+    public function destroy(Saacxcw $saacxcww)
     {
         //
     }
