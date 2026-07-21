@@ -87,7 +87,7 @@
                 </li>
                 @endif
 
-                @if(Auth::user()  and auth()->user()->can('menu_transporte') )
+                @if(Auth::user()  and auth()->user()->can('menu_transporte222222222') )
                     <li class="nav-item">
                         <a class="nav-link menu-link" href="#sidebarTransporte"
                            data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarTransporte">
