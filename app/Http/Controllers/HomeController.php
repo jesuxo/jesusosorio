@@ -1642,7 +1642,7 @@ class HomeController extends Controller
 
                 if(!isset($listadoc[$cobranza->nrounico]['cliente']))
                     $listadoc[$cobranza->nrounico]['cliente'] ='';
-                $listadoc[$cobranza->nrounico]['cliente'] =$cobranza->cliente->descrip;
+                $listadoc[$cobranza->nrounico]['cliente'] = (isset($cobranza->cliente->descrip))? $cobranza->cliente->descrip : '--';
 
                 if(!isset($listadoc[$cobranza->nrounico]['pesos']))
                     $listadoc[$cobranza->nrounico]['pesos'] =0;
