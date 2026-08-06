@@ -562,6 +562,9 @@ class PagoProveedorController extends Controller
         $pagosIncompletos = 0;
         $pagosCompletos = 0;
 
+        // NUEVO: Array para acumular modelos pendientes
+        $modelosPendientes = [];
+
         foreach ($pagos as $pago) {
             $totalComprobantes = $pago->comprobantes->sum('monto');
             $diferencia = $pago->monto_total - $totalComprobantes;
@@ -584,6 +587,24 @@ class PagoProveedorController extends Controller
             }
 
             if ($incluir) {
+                // NUEVO: Acumular modelos pendientes de este pago
+                foreach ($pago->detalles as $detalle) {
+                    $porRecibir = $detalle->cantidad - ($detalle->cantidad_recibida ?? 0);
+                    if ($porRecibir > 0) {
+                        $modelo = $detalle->producto_descrip;
+                        if (!isset($modelosPendientes[$modelo])) {
+                            $modelosPendientes[$modelo] = [
+                                'modelo' => $modelo,
+                                'codprod' => $detalle->producto_codprod,
+                                'pendientes' => 0,
+                                'monto_pendiente' => 0
+                            ];
+                        }
+                        $modelosPendientes[$modelo]['pendientes'] += $porRecibir;
+                        $modelosPendientes[$modelo]['monto_pendiente'] += $porRecibir * $detalle->precio_unitario;
+                    }
+                }
+
                 if ($diferencia > 0) {
                     $pagosIncompletos++;
                     $estadoComprobantes = $totalComprobantes > 0 ? 'parcial' : 'pendiente';
@@ -626,11 +647,16 @@ class PagoProveedorController extends Controller
                     'estado_comprobantes' => $estadoComprobantes,
                     'cantidad_comprobantes' => $pago->comprobantes_count,
                     'numero_aprobacion' => $pago->numero_aprobacion,
-                    'motos_pendientes_recibir' => $pago->total_pendiente, // Agregar esta línea
-                    'esta_pagado' => $estaPagado // Agregar esta línea
+                    'motos_pendientes_recibir' => $pago->total_pendiente,
+                    'esta_pagado' => $estaPagado
                 ];
             }
         }
+
+        // NUEVO: Ordenar modelos pendientes de mayor a menor
+        usort($modelosPendientes, function($a, $b) {
+            return $b['pendientes'] - $a['pendientes'];
+        });
 
         $estadisticas = [
             'total_pagos' => count($resumenPagos),
@@ -640,10 +666,13 @@ class PagoProveedorController extends Controller
             'total_diferencia' => $totalGeneralDiferencia,
             'pagos_incompletos' => $pagosIncompletos,
             'pagos_completos' => $pagosCompletos,
-            'tasa_completitud' => ($pagosIncompletos + $pagosCompletos) > 0 ? round(($pagosCompletos / ($pagosIncompletos + $pagosCompletos)) * 100, 2) : 0
+            'tasa_completitud' => ($pagosIncompletos + $pagosCompletos) > 0 ? round(($pagosCompletos / ($pagosIncompletos + $pagosCompletos)) * 100, 2) : 0,
+            // NUEVO: Agregar estadísticas de modelos pendientes
+            'total_modelos_pendientes' => count($modelosPendientes),
+            'total_unidades_pendientes' => collect($modelosPendientes)->sum('pendientes')
         ];
 
-        $view = view('pagos-proveedores.partials.resumen-general', compact('resumenPagos', 'estadisticas', 'tipo'))->render();
+        $view = view('pagos-proveedores.partials.resumen-general', compact('resumenPagos', 'estadisticas', 'tipo', 'modelosPendientes'))->render();
         return response()->json(['html' => $view]);
     }
 
