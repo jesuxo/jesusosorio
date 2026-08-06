@@ -1530,7 +1530,7 @@ class HomeController extends Controller
                              ((contado*Signo)/tasa_dolar) as contado
                             ")
             ->whereRaw(" TipoFac in('A','B','Z','W') and fk_sucursal = $fksucursal")
-            ->whereRaw("f.fk_sucursal in ($arraysucursales)")
+            ->whereRaw("fk_sucursal in ($arraysucursales)")
             ->whereBetween('fechat', [$fec1.' 00:00:00.00', $fec2.' 23:58:22.00']);
 
         if($credito == 1)
