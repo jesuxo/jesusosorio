@@ -624,11 +624,11 @@
                                     </thead>
                                     <tbody>
                                     @php $totalinst = 0; @endphp
-                                    @if(isset($linesdol[$index]))
-                                        @foreach($linesdol[$index] as $line)
+                                    @if(isset($linescop[$index]))
+                                        @foreach($linescop[$index] as $line)
                                             @php $totalinst += $line['monto']; @endphp
                                             <tr>
-                                                <td class="tdline"> {{$line['sucu']}}</td>
+                                                <td class="tdline">{{$line['sucu']}}</td>
                                                 <td class="tdline">{{$line['cliente']}}<br><small class="text-muted">{{$line['Descrip']}} </small></td>
                                                 <td class="tdline">
                                                     @if($line['doc'] == 'Fac')

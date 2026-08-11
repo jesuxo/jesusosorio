@@ -1725,11 +1725,9 @@ class HomeController extends Controller
         $tarjetasus = [];
         $tarjetasco = [];
 
-        $transacciones = 0;
-
         if(isset($montos) and count($montos)> 0 )
             foreach ($montos as $monto) {
-                $transacciones ++;
+
                 $line = [
                     'doc'     => 'Fac',
                     'sucu'    => $monto->sucursal,
@@ -1794,7 +1792,7 @@ class HomeController extends Controller
 
         if(isset($montos) and count($montos)> 0 )
             foreach ($montos as $monto) {
-                $transacciones ++;
+
                 $line = [
                     'doc'     => 'Cxc',
                     'sucu'    => $monto->sucursal,
@@ -1867,7 +1865,7 @@ class HomeController extends Controller
 
         if(isset($montos) and count($montos)> 0 )
             foreach ($montos as $monto) {
-                $transacciones ++;
+
                 $line = [
                     'doc'     => 'Fac',
                     'sucu'    => $monto->sucursal,
@@ -1933,7 +1931,7 @@ class HomeController extends Controller
 
         if(isset($montos) and count($montos)> 0 )
             foreach ($montos as $monto) {
-                $transacciones ++;
+
                 $line = [
                     'doc'     => 'Cxc',
                     'sucu'    => $monto->sucursal,
@@ -2006,7 +2004,7 @@ class HomeController extends Controller
 
         if(isset($montos) and count($montos)> 0 )
             foreach ($montos as $monto) {
-                $transacciones ++;
+
                 $line = [
                     'doc'     => 'Fac',
                     'sucu'    => $monto->sucursal,
@@ -2072,7 +2070,7 @@ class HomeController extends Controller
 
         if(isset($montos) and count($montos)> 0 )
             foreach ($montos as $monto) {
-                $transacciones ++;
+
                 $line = [
                     'doc'     => 'Cxc',
                     'sucu'    => $monto->sucursal,
