@@ -142,7 +142,7 @@
         <li class="nav-item" role="presentation">
             <a class="nav-link active" data-bs-toggle="tab" href="#nav-border-justified-home" role="tab" aria-selected="true" style="display:flex;min-width: 407px;">
                 <i class="ri-home-5-line align-middle me-1"></i>
-                <div>Listado de facturas + Cobranza <small>   {{$fecha1}} - {{$fecha2}}</small></div>
+                <div>Listado de facturas + Cobranza <small> {$fecha1}} - {{$fecha2}} </small></div>
             </a>
         </li>
         <li class="nav-item" role="presentation">
@@ -153,6 +153,11 @@
         <li class="nav-item" role="presentation">
             <a class="nav-link" data-bs-toggle="tab" href="#nav-border-justified-messages1" role="tab" aria-selected="false" tabindex="-1" style="display:flex;">
                 <i class="bi bi-list-ul  align-middle me-1"></i> <div>Instrumentos de pago USD</div>
+            </a>
+        </li>
+        <li class="nav-item" role="presentation">
+            <a class="nav-link" data-bs-toggle="tab" href="#nav-border-justified-messages2" role="tab" aria-selected="false" tabindex="-1" style="display:flex;">
+                <i class="bi bi-list-ul  align-middle me-1"></i> <div>Instrumentos de pago COP</div>
             </a>
         </li>
         <li class="nav-item" role="presentation">
@@ -269,7 +274,9 @@
                                                 @foreach($listadoc as $nrounico => $sucursal)
                                                     <tr @php echo ($n % 2 == 0) ? 'bgcolor="#eee"' : 'bgcolor="#fff"'; @endphp>
                                                         <td height="30" align="left" class="tdline">
-                                                            <div style="max-width: 99%; width: 100%; height: 20px; overflow: hidden; font-size: 12px">{{ $listadoc[$nrounico]['cliente'] ?? '' }}</div>
+                                                            <div style="max-width: 99%; width: 100%; height: 20px; overflow: hidden; font-size: 12px">{{ $listadoc[$nrounico]['cliente'] ?? '' }}
+                                                                <small style="text-muted">{{ $listadoc[$nrounico]['document'] ?? '' }}</small>
+                                                            </div>
                                                         </td>
                                                         <td align="right" class="tdline">{{ $listadoc[$nrounico]['numerod'] ?? '' }}</td>
                                                         <td align="right" class="tdline">{{ isset($listadoc[$nrounico]['cancele']) && $listadoc[$nrounico]['cancele'] != 0 ? number_format($listadoc[$nrounico]['cancele'],2,',','.') : '' }}</td>
@@ -443,7 +450,7 @@
                                             @php $totalinst += $line['monto']; @endphp
                                             <tr>
                                                 <td class="tdline"> {{$line['sucu']}}</td>
-                                                <td class="tdline">{{$line['cliente']}}</td>
+                                                <td class="tdline">{{$line['cliente']}}<small class="text-muted">{{$line['Descrip']}} </small></td>
                                                 <td class="tdline">
                                                     @if($line['doc'] == 'Fac')
                                                         <span class="badge-fac">Factura</span>
@@ -506,9 +513,8 @@
                             </a>
                             @php $flag = true; @endphp
                         @endforeach
-
                     </div>
-                </div> <!-- end col-->
+                </div>
                 <div class="col-lg-9">
                     <div class="tab-content text-muted mt-3 mt-lg-0">
                         @php $flag = false; @endphp
@@ -534,7 +540,7 @@
                                             @php $totalinst += $line['monto']; @endphp
                                             <tr>
                                                 <td class="tdline"> {{$line['sucu']}}</td>
-                                                <td class="tdline">{{$line['cliente']}}</td>
+                                                <td class="tdline">{{$line['cliente']}} <small class="text-muted">{{$line['Descrip']}} </small></td>
                                                 <td class="tdline">
                                                     @if($line['doc'] == 'Fac')
                                                         <span class="badge-fac">Factura</span>
@@ -579,7 +585,95 @@
 
                             @php $flag = true; @endphp
                         @endforeach
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="tab-pane" id="nav-border-justified-messages2" role="tabpanel">
+            <div class="row">
+                <div class="col-lg-3">
+                    <div class="nav nav-pills flex-column nav-pills-tab custom-verti-nav-pills text-center" role="tablist" aria-orientation="vertical">
+                        @php $flag = false; @endphp
+                        @foreach($tarjetasco as $index => $tt)
+                            <a class="nav-link  {{(!$flag)?'show active':''}}" id="tarjeta-{{$index}}-tab"
+                               data-bs-toggle="pill" href="#tarjeta-{{$index}}"
+                               role="tab" aria-controls="tarjeta-{{$index}}" aria-selected="true" style="display: flex;   align-content: center;  align-items: center;">
+                                <i class="bi bi-info-circle d-block fs-20 mb-1" style="margin-right: 10px;"></i> {{$tt}}
+                            </a>
+                            @php $flag = true; @endphp
+                        @endforeach
+                    </div>
+                </div>
+                <div class="col-lg-9">
+                    <div class="tab-content text-muted mt-3 mt-lg-0">
+                        @php $flag = false; @endphp
+                        @foreach($tarjetasco as $index => $tt)
+                            <div class="tab-pane fade  {{(!$flag)?'active show ':''}}" id="tarjeta-{{$index}}"
+                                 role="tabpanel" aria-labelledby="tarjeta-{{$index}}-tab">
 
+                                <table class="table table-sm table-hover" style="margin-top: 7px">
+                                    <thead>
+                                    <tr>
+                                        <th class="tdlineff" style="padding: 15px;">Sucursal</th>
+                                        <th class="tdlineff" style="padding: 15px;">Cliente</th>
+                                        <th class="tdlineff" style="padding: 15px;">Tipo</th>
+                                        <th class="tdlineff" style="padding: 15px;">Documento</th>
+                                        <th class="tdlineff" style="padding: 15px;">Referencia</th>
+                                        <th class="tdlineff" style="padding: 15px;">Monto Bs.</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    @php $totalinst = 0; @endphp
+                                    @if(isset($linesdol[$index]))
+                                        @foreach($linesdol[$index] as $line)
+                                            @php $totalinst += $line['monto']; @endphp
+                                            <tr>
+                                                <td class="tdline"> {{$line['sucu']}}</td>
+                                                <td class="tdline">{{$line['cliente']}}<small class="text-muted">{{$line['Descrip']}} </small></td>
+                                                <td class="tdline">
+                                                    @if($line['doc'] == 'Fac')
+                                                        <span class="badge-fac">Factura</span>
+                                                    @else
+                                                        <span class="badge-cxc">CXC</span>
+                                                    @endif
+                                                </td>
+                                                <td class="tdline">
+                                                    @if(isset($line['documen']) && $line['documen'] != '')
+                                                        @if(isset($line['TipoFac']) && $line['TipoFac'])
+                                                            <a href="/doc/{{$line['TipoFac']}}/{{$line['documen']}}/{{$line['fk_sucu']}}" target="_blank">
+                                                                {{$line['documen']}}
+                                                            </a>
+                                                        @else
+                                                            {{$line['documen']}}
+                                                        @endif
+                                                    @else
+                                                        -
+                                                    @endif
+                                                </td>
+                                                <td class="tdline" title="{{$line['Descrip']}}">
+                                                    {{ Str::limit($line['Descrip'], 30) }}
+                                                </td>
+                                                <td class="tdline text-end {{ $line['monto'] > 0 ? 'text-success' : 'text-danger' }}">
+                                                    {{ number_format($line['monto'], 2, ',', '.') }}
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    @endif
+                                    </tbody>
+                                    <tfoot class="table-light">
+                                    <tr>
+                                        <th colspan="5" class="text-end">Total:</th>
+                                        <th class="text-end text-primary">
+                                            {{ number_format($totalinst, 2, ',', '.') }}
+                                        </th>
+                                    </tr>
+                                    </tfoot>
+                                </table>
+
+                            </div>
+
+                            @php $flag = true; @endphp
+                        @endforeach
                     </div>
                 </div>
             </div>

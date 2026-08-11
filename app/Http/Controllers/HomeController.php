@@ -1550,7 +1550,7 @@ class HomeController extends Controller
 
 
         $cobranzas = Saacxcw::selectRaw("(cancele - (dolares*tasadolar)) as cancele, codusua, (cancelt - (dolar_tranf*tasadolar)) as cancelt, dolar_tranf as transf, dolares, codclie,
-          date_format(FechaT, '%d/%m/%Y') as fecha, CodVend, Document, nrounico, euros,cancelausd, codesta,
+          date_format(FechaT, '%d/%m/%Y') as fecha, CodVend, document, nrounico, euros,cancelausd, codesta,
         tasadolar, pesos, peso_tranf, tasapeso, numerod, tipocxc, montodolares, fk_sucursal, CodClie ")
             ->with([ 'cliente',
                 'sucursal.comercial:id',
@@ -1596,6 +1596,16 @@ class HomeController extends Controller
                 if(!isset($listadoc[$cobranza->nrounico]['cliente']))
                     $listadoc[$cobranza->nrounico]['cliente'] ='';
                 $listadoc[$cobranza->nrounico]['cliente'] = $cobranza->cliente->descrip ?? '';
+
+                if(!isset($listadoc[$cobranza->nrounico]['document']))
+                    $listadoc[$cobranza->nrounico]['document'] ='';
+
+                $listadoc[$cobranza->nrounico]['document'] = $cobranza->document ?? '';
+
+                if(isset($cobranza->notas1) and $cobranza->notas1 !='')
+                    $listadoc[$cobranza->nrounico]['document'] .= $cobranza->notas1 ;
+                if(isset($cobranza->notas2) and $cobranza->notas2 !='')
+                    $listadoc[$cobranza->nrounico]['document'] .= $cobranza->notas2 ;
 
                 if(!isset($listadoc[$cobranza->nrounico]['pesos']))
                     $listadoc[$cobranza->nrounico]['pesos'] =0;
@@ -1713,6 +1723,7 @@ class HomeController extends Controller
         $lines      = [];
         $tarjetasbs = [];
         $tarjetasus = [];
+        $tarjetasco = [];
 
         $transacciones = 0;
 
@@ -1948,6 +1959,146 @@ class HomeController extends Controller
 
             }
 
+        /////////////// cop dol
+        $linescop = [];
+
+        if($fec1 != ''){
+
+            $montos = Saipavta::select([
+                'saipavta.id',
+                'saipavta.fk_sucursal',
+                'saipavta.TipoFac',
+                'saipavta.NumeroD',
+                'saipavta.Descrip',
+                'b.codtarj',
+                'f.codoper',
+                'b.clase',
+                DB::raw("(CASE f.TipoFac WHEN 'Z' THEN saipavta.pesos WHEN 'W' THEN (saipavta.pesos * -1) ELSE 0 END) as pesos"),
+                DB::raw("b.descrip as tarjeta"),
+                DB::raw("c.descrip as sucursal")
+            ])
+                ->with('factura')
+                ->join('satarj as b', 'CodPago', '=', 'b.codtarj')
+                ->join('sasucursal as c', 'saipavta.fk_sucursal', '=', 'c.id')
+                ->join('safact as f', function($join) {
+                    $join->on('saipavta.NumeroD',     '=', 'f.NumeroD')
+                        ->on('saipavta.TipoFac',     '=', 'f.TipoFac')
+                        ->on('saipavta.fk_sucursal', '=', 'f.fk_sucursal');
+                })
+                ->where('b.pesos', 1)
+                ->whereRaw("saipavta.fk_sucursal in ($arraysucursales)")
+                ->where('b.comercial', $comercialid)
+                ->where('saipavta.fk_sucursal', $fksucursal)
+                ->where('c.fk_comercial', $comercialid)
+                ->whereBetween('saipavta.fechae', [
+                    Carbon::parse($fec1)->startOfDay()->format('Y-m-d H:i:s'),
+                    Carbon::parse($fec2)->endOfDay()->format('Y-m-d H:i:s')
+                ]);
+
+            if(isset($codoper) and $codoper != '' and $codoper > 0){
+                $montos = $montos->where('f.codoper', $codoper);
+            }
+
+            $montos = $montos->orderBy('saipavta.NumeroD','asc')->get();
+
+
+        }
+
+        if(isset($montos) and count($montos)> 0 )
+            foreach ($montos as $monto) {
+                $transacciones ++;
+                $line = [
+                    'doc'     => 'Fac',
+                    'sucu'    => $monto->sucursal,
+                    'fk_sucu' => $monto->fk_sucursal,
+                    'codtarj' => $monto->codtarj,
+                    'Descrip' => $monto->Descrip,
+                    'cliente' => $monto->factura->Descrip,
+                    'monto'   => $monto->pesos,
+                    'TipoFac' => (isset($monto->TipoFac))? $monto->TipoFac: '',
+                    'documen' => (isset($monto->NumeroD))? $monto->NumeroD: '',
+                    'codoper' => (isset($monto->codoper))? $monto->codoper: '',
+                ];
+
+                if(!isset($tarjetasco[$monto->codtarj])){
+                    $tarjetasco[$monto->codtarj] = $monto->tarjeta;
+                }
+
+                if(!isset($linescop[$monto->codtarj])){
+                    $linescop[$monto->codtarj]  = [];
+                }
+
+                array_push($linescop[$monto->codtarj], $line);
+            }
+
+        $montos = [];
+
+        if($fec1 != '') {
+
+            $montos = Saipacxcw::
+            select([
+                'saipacxcw.fk_sucursal', 'b.codtarj', 'b.clase', 'saipacxcw.NroPpal',
+                'saipacxcw.Descrip',
+                'saipacxcw.codclie',
+                DB::raw(' (saipacxcw.pesos) as pesos'),
+                DB::raw("b.descrip as tarjeta"),
+                DB::raw("c.descrip as sucursal"),
+                DB::raw("e.descrip as nombrecliente")
+            ])
+                ->join('satarj as b'    , 'saipacxcw.CodPago'    , '=', 'b.codtarj')
+                ->join('sasucursal as c', 'saipacxcw.fk_sucursal', '=', 'c.id')
+                ->join('saacxcw as d'    , 'saipacxcw.NroPpal'    , '=', 'd.nrounico')
+                ->join('saclie as e'    , 'd.codclie'    , '=', 'e.codclie')
+                ->where('c.fk_comercial', $comercialid)
+                ->whereRaw("d.tipocxc not in ('99','98') and d.fk_sucursal = saipacxcw.fk_sucursal")
+                ->whereRaw("saipacxcw.fk_sucursal in ($arraysucursales)")
+                ->with('cxc')
+                ->where('saipacxcw.fk_sucursal', $fksucursal)
+                ->where('b.pesos', 1)
+                ->where('b.comercial', $comercialid)
+                ->whereBetween('saipacxcw.created_at', [
+                    Carbon::parse($fec1)->startOfDay()->format('Y-m-d H:i:s'),
+                    Carbon::parse($fec2)->endOfDay()->format('Y-m-d H:i:s')
+                ]);
+
+
+            // Filtrar por codoper
+            if(isset($codoper) and $codoper != '' and $codoper > 0){
+                $montos = $montos->where('d.codoper', $codoper);
+            }
+            $montos = $montos->orderBy('saipacxcw.NroPpal')->get();
+
+        }
+
+        if(isset($montos) and count($montos)> 0 )
+            foreach ($montos as $monto) {
+                $transacciones ++;
+                $line = [
+                    'doc'     => 'Cxc',
+                    'sucu'    => $monto->sucursal,
+                    'fk_sucu' => $monto->fk_sucursal,
+                    'codtarj' => $monto->codtarj,
+                    'Descrip' => $monto->Descrip,
+                    'cliente' => (isset($monto->nombrecliente))?$monto->nombrecliente : '',
+                    'monto'   => $monto->pesos,
+                    'TipoFac' => '',
+                    'documen' => (isset($monto->cxc->NumeroD))? $monto->cxc->NumeroD: '',
+                    'codoper' => $monto->codoper ?? '',
+                ];
+
+                if(!isset($tarjetasco[$monto->codtarj])){
+                    $tarjetasco[$monto->codtarj] = $monto->tarjeta;
+                }
+
+                if(!isset($linescop[$monto->codtarj])){
+                    $linescop[$monto->codtarj]  = [];
+                }
+
+                array_push($linescop[$monto->codtarj], $line);
+
+            }
+
+
         return view('reporteventasucursal', compact(
             'fechasreport',
             'listadoc',
@@ -1957,9 +2108,11 @@ class HomeController extends Controller
             'fecha1',
             'lines',
             'linesdol',
+            'linescop',
             'fecha2',
             'tarjetasbs',
             'tarjetasus',
+            'tarjetasco',
             'sucursales',
             'listado',
             'tcancele', 'tcancelt', 'tdolares', 'ttransf',
