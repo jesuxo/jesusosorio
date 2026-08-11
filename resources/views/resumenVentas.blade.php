@@ -1,3 +1,5 @@
+{{-- resources/views/resumenVentas.blade.php --}}
+
 @extends('layouts.master')
 @section('title')
     Inicio
@@ -12,7 +14,6 @@
         .botoncal:hover{
             font-size: 13px;
         }
-
         .linkunderline:hover{
             text-decoration: underline;
         }
@@ -126,37 +127,80 @@
                         @csrf
                         @method('POST')
 
-                        <div class="input-group">
-                            <input type="text" class="form-control" data-provider="flatpickr"
-                                   data-range-date="true" data-date-format="d/m/Y" id="fechasreport"
-                                   data-deafult-date="" name="fechasreport" readonly="readonly" value="{{$fechasreport}}"
-                            >
-                            <div class="input-group-text bg-primary border-primary text-white">
-                                <button type="submit" class="botoncal" >Consultar</button>
+                        <div class="row g-2 align-items-end">
+                            <div class="col-auto">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" data-provider="flatpickr"
+                                           data-range-date="true" data-date-format="d/m/Y" id="fechasreport"
+                                           data-deafult-date="" name="fechasreport" readonly="readonly" value="{{$fechasreport}}">
+                                    <div class="input-group-text bg-primary border-primary text-white">
+                                        <button type="submit" class="botoncal">Consultar</button>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="mt-2" style="display: flex; justify-content: space-between">
-                            @php
-                                list($fecha1,$fecha2) = explode(" to ",$fechasreport);
+                            <!-- Filtro de Sucursal -->
+                            <div class="col-auto">
+                                <select name="fksucursal" id="fksucursal" onchange="$('#form1').submit()"
+                                        class="form-select" style="min-width: 200px;">
+                                    <option value="">Todas las sucursales</option>
+                                    @foreach($sucursalesList as $suc)
+                                        <option value="{{$suc->id}}" {{ $fksucursal == $suc->id ? 'selected' : '' }}>
+                                            {{$suc->descrip}}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
 
-                                if($fecha1 != $fecha2){
-                                    $fechasreport = "$fecha1 - $fecha2";
-                            @endphp
-                            @php
-                                }else{
-                                    $fechasreport = "$fecha1";
-                                    list($d,$m,$y)=explode('/',$fecha1);
-                                    $fechaanterior = date('d/m/Y',strtotime("$y-$m-$d -1 day"));
-                                    $fechaposterior = date('d/m/Y',strtotime("$y-$m-$d +1 day"));
+                            <div class="col-auto">
+                                <select name="fkestacion" {{(!$fksucursal)? 'disabled': ''}} id="fkestacion"
+                                        class="form-select" style="min-width: 200px;"  onchange="$('#form1').submit()">
+                                    <option value="">{{(!$fksucursal)? 'Seleccione Sucursal ': 'Todas las Estaciones'}}</option>
+                                    @foreach($estaciones as $index => $est)
+                                        <option value="{{$est['codesta']}}" {{ $fkestacion == $est['codesta'] ? 'selected' : '' }}>
+                                            {{$est['codesta']}}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-auto" style=" height: 40px; display:flex; align-items: center; justify-content: space-between;">
+                                @php
+                                    $partes = explode(" to ", $fechasreport);
+                                    $fecha1 = $partes[0];
+                                    $fecha2 = $partes[1] ?? $partes[0];
 
-                            @endphp
-                            <a href="javascript:;" onclick="$('#fechasreport').val('{{$fechaanterior}}'); loadingreport('/resumenVentas') "> << {{$fechaanterior}}</a>
-
-                            <a href="javascript:;" onclick="$('#fechasreport').val('{{$fechaposterior}}'); loadingreport('/resumenVentas') "> {{$fechaposterior}}  >> </a>
-                            @php
-                                }
-                            @endphp
+                                    if($fecha1 != $fecha2){
+                                        $fechasreport = "$fecha1 - $fecha2";
+                                    }else{
+                                        $fechasreport = "$fecha1";
+                                    }
+                                    if($fecha1 == $fecha2):
+                                        list($d, $m, $y) = explode('/', $fecha1);
+                                        $fechaanterior = date('d/m/Y', strtotime("$y-$m-$d -1 day"));
+                                        $fechaposterior = date('d/m/Y', strtotime("$y-$m-$d +1 day"));
+                                @endphp
+                                <a href="javascript:;" onclick="$('#fechasreport').val('{{$fechaanterior}}'); loadingreport('/resumenVentas')"> << {{$fechaanterior}}</a>
+                                <i class="ri-calendar-2-fill" style="margin: 0px 10px;"></i>
+                                <a href="javascript:;" onclick="$('#fechasreport').val('{{$fechaposterior}}'); loadingreport('/resumenVentas')"> {{$fechaposterior}} >> </a>
+                                @php
+                                    endif;
+                                @endphp
+                            </div>
+                            @if($fkestacion or $fksucursal)
+                                <div class="col-auto">
+                                    <a href="javascript:;"  onclick="limpiarFiltros()"
+                                       class="d-flex align-items-center p-1 m-2 linkunderline" style="text-align: center; border: 1px solid #0072c5; border-radius: 5px;">
+                                        <i class="bi bi-eraser"></i> Limpiar
+                                    </a>
+                                </div>
+                                <script>
+                                    function limpiarFiltros() {
+                                        $('#fksucursal').val('');
+                                        $('#fkestacion').val('');
+                                        $('#form1').submit();
+                                    }
+                                </script>
+                            @endif
                         </div>
 
                     </form>
@@ -224,6 +268,7 @@
                                                             <a href="javascript:;"  class="fw-medium fs-14 mb-0 reporteventasucursalmodal"
                                                                data-fksucursal   = "{{$sucursal['id']}}"
                                                                data-fechasreport = "{{$fechasreport}}"
+                                                               data-fkestacion   = "{{$fkestacion}}"
                                                                data-contado      = ""
                                                                data-credito      = ""
                                                                onclick="$('#titulorepventasucu').html('REPORTE DE VENTAS DE {{$sucursal['descrip']}}')"
@@ -332,6 +377,7 @@
                                                                 <a href="javascript:;"  class="fw-medium fs-14 mb-0 reporteventasucursalmodal"
                                                                    data-fksucursal   = "{{$sucursal['id']}}"
                                                                    data-fechasreport = "{{$fechasreport}}"
+                                                                   data-fkestacion   = "{{$fkestacion}}"
                                                                    data-contado      = ""
                                                                    data-credito      = ""
                                                                    onclick="$('#titulorepventasucu').html('REPORTE DE VENTAS DE {{$sucursal['descrip']}}')"
@@ -435,7 +481,7 @@
                         <div class="col-12 col-sm-12 p-0">
                             <div class="p-5 pt-3 d-flex justify-content-between pb-3 border border-dashed border-start-0">
                                 <p class="text-muted mb-0">Total (Contado+Cr&eacute;dito)</p>
-                                <h5 class="mb-1 text-primary "><span >$<span >{{number_format($credito+$contado,2,',','.')}}</h5>
+                                <h5 class="mb-1 text-primary">${{number_format($credito+$contado,2,',','.')}}</h5>
                             </div>
                         </div>
 
@@ -528,11 +574,18 @@
             var contado      = $(this).attr('data-contado');
             var credito      = $(this).attr('data-credito');
             var fechasreport = $(this).attr('data-fechasreport');
+            var fkestacion   = $(this).attr('data-fkestacion');  // AGREGAR ESTA LÍNEA
 
             $('#contentreporteventasucu').html('<button class="btn btn-outline-primary btn-load"><span class="d-flex align-items-center"><span class="spinner-border flex-shrink-0" role="status"> <span class="visually-hidden"> Cargando...</span> </span> <span class="flex-grow-1 ms-2">Cargando... </span> </span> </button>');
             $.ajax({
                 type:'post',
-                data:{credito: (credito)? credito : '', contado: (contado)? contado : '', fechasreport: (fechasreport)? fechasreport : '',fksucursal: (fksucursal)? fksucursal : '' },
+                data:{
+                    credito: (credito)? credito : '',
+                    contado: (contado)? contado : '',
+                    fechasreport: (fechasreport)? fechasreport : '',
+                    fksucursal: (fksucursal)? fksucursal : '',
+                    fkestacion: (fkestacion)? fkestacion : ''   // AGREGAR ESTA LÍNEA
+                },
                 url:'/reporte/venta/sucu',
                 headers: {
                     'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')

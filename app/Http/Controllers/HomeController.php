@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Saacxcw;
 use App\Models\Safact;
 use App\Models\Sainsta;
+use App\Models\Saipacxcw;
+use App\Models\Saipavta;
 use App\Models\Saitemcom;
 use App\Models\Saitemfac;
 use App\Models\Saoper;
@@ -672,8 +674,12 @@ class HomeController extends Controller
             $comercialid = 1;
         }
 
+        // Obtener filtros
+        $fkestacion = $request->fkestacion ?? ''; // filtro por codesta
+        $fksucursal = $request->fksucursal ?? ''; // filtro por sucursal
+
         $fechasreport = $request->fechasreport;
-        $fechashoy    =  Carbon::now()->format('d/m/Y');
+        $fechashoy    = Carbon::now()->format('d/m/Y');
         $nofilterdate = 0;
 
         if(!$fechasreport) {
@@ -706,8 +712,19 @@ class HomeController extends Controller
         $fec1 = "$y1-$m1-$d1";
         $fec2 = "$y2-$m2-$d2";
 
+        // Obtener estaciones disponibles según la sucursal seleccionada
+        $sucursalesList = Sasucursal::where('fk_comercial', $comercialid)
+            ->whereRaw("id in ($arraysucursales)")
+            ->get();
+
+        if(count($sucursalesList) == 1) {
+            $fksucursal = $sucursalesList[0]->id;
+        }
+
+        $estaciones   = [];
         $costoinven   = [];
         $unidadesvendidas = '';
+        $conteoest    = 0;
         $contado      = 0;
         $credito      = 0;
         $facturas     = 0;
@@ -715,45 +732,60 @@ class HomeController extends Controller
         $sucursales   = [];
         $cxc          = '';
 
+        $contado = $credito = $facturas = $devoluciones = $unidadesvendidas = 0;
+        $sucursales = [];
 
-        $contado = $credito =  $facturas = $devoluciones = $unidadesvendidas = 0;
-        $sucursales  = [];
-
-        if(isset($items))
-            $unidadesvendidas =  $items->tantos;
-
-
-        $ventas = Safact::selectRaw("
-                                                fk_sucursal,
-                                                tipofac,
-                                                count(*) as tantas,
-                                                sum(((contado + credito) * Signo) / tasa_dolar) as totalventa,
-                                                sum((credito * Signo) / tasa_dolar) as credito,
-                                                sum((contado * Signo) / tasa_dolar) as contado
-                                            ")
+        // Query de ventas con filtro de estación (codesta)
+        $ventasQuery = Safact::selectRaw("
+        fk_sucursal, codesta, CodVend,
+        tipofac,
+        count(*) as tantas,
+        sum(((contado + credito) * Signo) / tasa_dolar) as totalventa,
+        sum((credito * Signo) / tasa_dolar) as credito,
+        sum((contado * Signo) / tasa_dolar) as contado
+    ")
             ->with([
                 'sucursal.comercial:id',
+                'vendedor'  // Agregar relación con vendedor
             ])
-            ->whereIn('TipoFac', ['W', 'Z'])
+            ->whereIn('TipoFac', ['Z', 'W'])
             ->whereRaw("fk_sucursal in ($arraysucursales)")
             ->whereBetween('fechat', ["{$fec1} 00:00:00", "{$fec2} 23:59:59"])
             ->whereHas('sucursal.comercial', function ($q) use ($comercialid) {
                 $q->where('fk_comercial', $comercialid);
-            })
-            ->groupBy(['fk_sucursal', 'tipofac'])
-            ->get();
+            });
+
+        // Aplicar filtro por codesta (estación)
+        if(!empty($fkestacion)) {
+            $ventasQuery->where('codesta', $fkestacion);
+        }
+
+        // Aplicar filtro por sucursal
+        if(!empty($fksucursal)) {
+            $ventasQuery->where('fk_sucursal', $fksucursal);
+        }
+
+        $ventas = $ventasQuery->groupBy(['fk_sucursal','codesta', 'tipofac', 'CodVend'])->get();
 
         foreach($ventas as $venta){
 
-            if($venta->tipofac == 'A' or $venta->tipofac == 'Z'){
+            if(!empty($venta->codesta) && !in_array($venta->codesta, array_column($estaciones, 'codesta'))) {
+                $estaciones[] = [
+                    'codesta'     => $venta->codesta,
+                    'fk_sucursal' => $venta->fk_sucursal
+                ];
+            }
+
+            if( $venta->tipofac == 'Z'){
                 $facturas += $venta->tantas;
             }
-            if($venta->tipofac == 'B' or $venta->tipofac == 'W'){
+            if(  $venta->tipofac == 'W'){
                 $devoluciones += $venta->tantas;
             }
 
             $contado += number_format($venta->contado, 2, '.', '');
             $credito += number_format($venta->credito, 2, '.', '');
+
 
             if(!isset($sucursales[$venta->fk_sucursal]['descrip'])) {
                 $sucursales[$venta->fk_sucursal]['descrip'] = $venta->sucursal->descrip;
@@ -771,37 +803,56 @@ class HomeController extends Controller
             $sucursales[$venta->fk_sucursal]['contado'] += number_format($venta->contado,2,'.','');
             $sucursales[$venta->fk_sucursal]['credito'] += number_format($venta->credito,2,'.','');
 
-            if($venta->tipofac == 'A' or $venta->tipofac == 'Z'){
+            if( $venta->tipofac == 'Z'){
                 $sucursales[$venta->fk_sucursal]['facturas'] = $venta->tantas;
             }
-            if($venta->tipofac == 'B' or $venta->tipofac == 'W'){
+            if( $venta->tipofac == 'W'){
                 $sucursales[$venta->fk_sucursal]['devoluciones'] = $venta->tantas;
             }
         }
 
-        // MODIFICADO: Agregar totales de cobranzas (monto y cantidad)
-        $cobranzas = Saacxcw::selectRaw("
-            count(*) as tantas,
-            sum(montodolares) as cobranza,
-            fk_sucursal
-        ")
-            ->whereRaw("fk_sucursal in ($arraysucursales)")
+        // Query de cobranzas con filtro de estación (codesta en saacxcw)
+        $cobranzasQuery = Saacxcw::selectRaw("
+        count(*) as tantas,
+        sum(montodolares) as cobranza,
+        fk_sucursal, codesta, CodVend
+    ")
             ->with([
                 'sucursal.comercial:id',
+                'vendedor'  // Agregar relación con vendedor
             ])
-            ->whereRaw("tipocxc <> 99 and (tipocxc = 50 or EsUnPago = 1)")
+            ->whereRaw("fk_sucursal in ($arraysucursales)")
+            ->whereRaw("tipocxc not in( '99','98') and (tipocxc = 50 or EsUnPago = 1)")
             ->whereBetween('fechat', ["{$fec1} 00:00:00", "{$fec2} 23:59:59"])
             ->whereHas('sucursal.comercial', function ($q) use ($comercialid) {
                 $q->where('fk_comercial', $comercialid);
-            })
-            ->groupBy(['fk_sucursal'])
-            ->get();
+            });
 
-        // Inicializar totales de cobranzas
+        // Aplicar filtro por codesta en cobranzas
+        if(!empty($fkestacion)) {
+            $cobranzasQuery->where('codesta', $fkestacion);
+        }
+
+        // Aplicar filtro por sucursal
+        if(!empty($fksucursal)) {
+            $cobranzasQuery->where('fk_sucursal', $fksucursal);
+        }
+
+        $cobranzas = $cobranzasQuery->groupBy(['fk_sucursal','codesta', 'CodVend'])->get();
+
         $totalCobranzasMonto = 0;
         $totalCobranzasCantidad = 0;
 
         foreach($cobranzas as $cobranza){
+
+            if(!empty($cobranza->codesta) && !in_array($cobranza->codesta, array_column($estaciones, 'codesta'))) {
+                $estaciones[] = [
+                    'codesta'     => $cobranza->codesta,
+                    'fk_sucursal' => $cobranza->fk_sucursal
+                ];
+            }
+
+
             if(!isset($sucursales[$cobranza->fk_sucursal]['descrip'])) {
                 $sucursales[$cobranza->fk_sucursal]['descrip']      = $cobranza->sucursal->descrip;
                 $sucursales[$cobranza->fk_sucursal]['id']           = $cobranza->sucursal->id;
@@ -816,162 +867,19 @@ class HomeController extends Controller
             $sucursales[$cobranza->fk_sucursal]['tcobranzas'] += $cobranza->tantas;
             $sucursales[$cobranza->fk_sucursal]['cobranzas']  += $cobranza->cobranza;
 
-            // Acumular totales
-            $totalCobranzasMonto += $cobranza->cobranza;
+            $totalCobranzasMonto    += $cobranza->cobranza;
             $totalCobranzasCantidad += $cobranza->tantas;
         }
 
         sort($sucursales);
 
-        $montos = DB::table('saipavta as a')
-            ->select([
-                'b.clase',
-                DB::raw("SUM(CASE a.tipofac WHEN 'A' THEN a.monto WHEN 'B' THEN (a.monto * -1) ELSE 0 END) as bs"),
-                DB::raw("SUM(CASE a.tipofac WHEN 'Z' THEN a.monto WHEN 'W' THEN (a.monto * -1) ELSE 0 END) as bs"),
-            ])
-            ->whereRaw("a.fk_sucursal in ($arraysucursales)")
-            ->join('satarj as b', 'a.CodPago', '=', 'b.codtarj')
-            ->join('sasucursal as c', 'a.fk_sucursal', '=', 'c.id')
-            ->where('b.bs', 1)
-            ->where('b.comercial', $comercialid)
-            ->where('c.fk_comercial', $comercialid)
-            ->whereExists(function($query) use ($comercialid) {
-                $query->select(DB::raw(1))
-                    ->from('sasucursal as s')
-                    ->whereColumn('s.id', 'a.fk_sucursal')
-                    ->where('s.fk_comercial', $comercialid);
-            })
-            ->whereBetween('a.fechae', [
-                Carbon::parse($fec1)->startOfDay()->format('Y-m-d H:i:s'),
-                Carbon::parse($fec2)->endOfDay()->format('Y-m-d H:i:s')
-            ])
-            ->groupBy('b.clase');
 
-        if(isset($fksucursal) and $fksucursal != '' and $fksucursal > 0){
-            $montos = $montos->where('a.fk_sucursal', $fksucursal);
-        }
-
-        $montos = $montos->get();
-
-        $clases     = [];
-        $listado    = [];
-        $listadousd = [];
-
-        if(isset($montos) and count($montos)> 0) {
-            foreach ($montos as $monto) {
-                if(!isset($clases[$monto->clase])){
-                    $clases[$monto->clase] = $monto->clase;
-                }
-                if(!isset($listado[$monto->clase]))
-                    $listado[$monto->clase] = 0;
-                $listado[$monto->clase] += $monto->bs;
-            }
-        }
-
-        $montos = DB::table('saipacxcw as a')
-            ->select([
-                'b.clase',
-                DB::raw('SUM(a.monto) as bs')
-            ])
-            ->whereRaw("c.id in ($arraysucursales)")
-            ->join('satarj as b', 'a.CodPago', '=', 'b.codtarj')
-            ->join('sasucursal as c', 'a.fk_sucursal', '=', 'c.id')
-            ->where('c.fk_comercial', $comercialid)
-            ->where('b.bs', 1)
-            ->where('b.comercial', $comercialid)
-            ->whereRaw("a.created_at >= '$fec1 00:00:00' and a.created_at <= '$fec2 23:59:00'")
-            ->groupBy('b.clase');
-
-        if(isset($fksucursal) and $fksucursal != '' and $fksucursal > 0){
-            $montos = $montos->where('a.fk_sucursal', $fksucursal);
-        }
-
-        $montos = $montos->get();
-
-        if(isset($montos) and count($montos)> 0) {
-            foreach ($montos as $monto) {
-                if(!isset($clases[$monto->clase])){
-                    $clases[$monto->clase] = $monto->clase;
-                }
-                if(!isset($listado[$monto->clase]))
-                    $listado[$monto->clase] = 0;
-                $listado[$monto->clase] += $monto->bs;
-            }
-        }
-
-        $montos = DB::table('saipavta as a')
-            ->select([
-                'b.clase',
-                DB::raw("SUM(CASE a.tipofac WHEN 'A' THEN a.dolares WHEN 'B' THEN (a.dolares * -1) ELSE 0 END) as dolares"),
-                DB::raw("SUM(CASE a.tipofac WHEN 'Z' THEN a.dolares WHEN 'W' THEN (a.dolares * -1) ELSE 0 END) as dolares")
-            ])
-            ->whereRaw("a.fk_sucursal in ($arraysucursales)")
-            ->join('satarj as b', 'a.codpago', '=', 'b.codtarj')
-            ->join('sasucursal as c', function ($join) use ($comercialid) {
-                $join->on('a.fk_sucursal', '=', 'c.id')
-                    ->where('c.fk_comercial', '=', $comercialid);
-            })
-            ->where('b.dolares', 1)
-            ->where('b.comercial', $comercialid)
-            ->whereBetween('a.fechae', [
-                Carbon::parse($fec1)->startOfDay()->format('Y-m-d H:i:s'),
-                Carbon::parse($fec2)->endOfDay()->format('Y-m-d H:i:s')
-            ])
-            ->groupBy('b.clase');
-
-        if(isset($fksucursal) and $fksucursal != '' and $fksucursal > 0){
-            $montos = $montos->where('a.fk_sucursal', $fksucursal);
-        }
-
-        $montos = $montos->get();
-
-        if (isset($montos)) {
-            foreach ($montos as $monto) {
-                if (!isset($clases[$monto->clase])) {
-                    $clases[$monto->clase] = $monto->clase;
-                }
-                if (!isset($listadousd[$monto->clase]))
-                    $listadousd[$monto->clase] = 0;
-                $listadousd[$monto->clase] += $monto->dolares;
-            }
-        }
-
-        $montos = DB::table('saipacxcw as a')
-            ->select([
-                'b.clase',
-                DB::raw('SUM(a.dolares) as dolares')
-            ])
-            ->whereRaw("c.id in ($arraysucursales)")
-            ->join('satarj as b', 'a.CodPago', '=', 'b.codtarj')
-            ->join('sasucursal as c', 'a.fk_sucursal', '=', 'c.id')
-            ->where('c.fk_comercial', $comercialid)
-            ->where('b.comercial', $comercialid)
-            ->where('b.dolares', 1)
-            ->whereRaw("a.created_at >= '$fec1 00:00:00' and a.created_at <= '$fec2 23:59:00'")
-            ->groupBy('b.clase')
-            ->get();
-
-        if (isset($montos)) {
-            foreach ($montos as $monto) {
-                if (!isset($clases[$monto->clase])) {
-                    $clases[$monto->clase] = $monto->clase;
-                }
-                if (!isset($listadousd[$monto->clase]))
-                    $listadousd[$monto->clase] = 0;
-                $listadousd[$monto->clase] += $monto->dolares;
-            }
-        }
-
-        ksort($clases);
 
         Session::put('lang', 'sp');
         Session::save();
 
         return view('resumenVentas', compact(
             'fechasreport',
-            'clases',
-            'listado',
-            'listadousd',
             'costoinven',
             'unidadesvendidas',
             'contado',
@@ -980,9 +888,12 @@ class HomeController extends Controller
             'devoluciones',
             'sucursales',
             'cxc',
-            // NUEVAS VARIABLES ENVIADAS
             'totalCobranzasMonto',
-            'totalCobranzasCantidad'
+            'totalCobranzasCantidad',
+            'estaciones',
+            'sucursalesList',
+            'fkestacion',
+            'fksucursal'
         ));
     }
 
@@ -1479,6 +1390,7 @@ class HomeController extends Controller
             $comercialid = 1;
         }
 
+        $fkestacion   = $request->fkestacion;
         $fechasreport = $request->fechasreport;
         $fksucursal   = $request->fksucursal;
         $contado      = $request->contado;
@@ -1487,12 +1399,16 @@ class HomeController extends Controller
         $fechasaux = str_replace(' ','',$fechasreport);
         $fec1 = $fec2 = '';
 
-        if(strpos($fechasaux,"-"))
-            list($fec1, $fec2) = explode("-",$fechasaux);
-        else {
-            list($d1, $m1, $y1) = explode("/", $fechasreport);
-            $fec1 = "$d1/$m1/$y1";
-            $fec2 = $fec1;
+        if(strpos($fechasaux,"to")){
+            list($fec1, $fec2) = explode("to",$fechasaux);
+        }else {
+            if(strpos($fechasaux,"-")){
+                list($fec1, $fec2) = explode("-",$fechasaux);
+            }else {
+                list($d1, $m1, $y1) = explode("/", $fechasreport);
+                $fec1 = "$d1/$m1/$y1";
+                $fec2 = $fec1;
+            }
         }
 
         $fecha1 = $fec1;
@@ -1504,6 +1420,14 @@ class HomeController extends Controller
         $fec1 = "$y1-$m1-$d1";
         $fec2 = "$y2-$m2-$d2";
 
+        $filtrarsucursal = '';
+        if($fksucursal>0)
+            $filtrarsucursal = " and fk_sucursal = $fksucursal";
+
+        if($fkestacion>0)
+            $filtrarsucursal .= " and codesta = '$fkestacion'";
+
+
         $ventas = Safact::selectRaw("fk_sucursal,nrounico,descrip,numerod, tipofac, codclie,
                             ((dolares-vuelto_dolares)*Signo) as dolares,
                             (pesos*Signo) as pesos,
@@ -1512,7 +1436,6 @@ class HomeController extends Controller
                             (dolar_transf*Signo) as transf,
                             ((cancele-efectivosumado-vuelto_cancele)*Signo) as cancele,
                              ((vuelto_cancele)*Signo) as vuelto_cancele,
-
                             (mtotax*Signo) as mtotax,
                             (TGravable*Signo) as montobase,
                             ((cancelt-tarjetasumado)*Signo) as cancelt,
@@ -1521,6 +1444,7 @@ class HomeController extends Controller
                             (igtf_cancelt*Signo) as igtf_cancelt ,
                             (igtf_dolares*Signo) as igtf_dolares  ,
                             (igtf_pesos*Signo) as igtf_pesos,
+                            codesta,
                             (igtf_dolar_transf*Signo) as igtf_transf,
                              (igtf_monto*Signo) as igtf_monto ,
                              ((mtototal*Signo)/tasa_dolar) as mtototal,
@@ -1529,16 +1453,21 @@ class HomeController extends Controller
                              ((credito*Signo)/tasa_dolar) as credito,
                              ((contado*Signo)/tasa_dolar) as contado
                             ")
-            ->whereRaw(" TipoFac in('A','B','Z','W') and fk_sucursal = $fksucursal")
+            ->whereRaw(" TipoFac in( 'Z','W') $filtrarsucursal")
             ->whereRaw("fk_sucursal in ($arraysucursales)")
             ->whereBetween('fechat', [$fec1.' 00:00:00.00', $fec2.' 23:58:22.00']);
 
         if($credito == 1)
             $ventas = $ventas->whereRaw("credito > 10");
 
-        $ventas = $ventas->get();
+        $ventas = $ventas->orderBy('nrounico')->get();
 
         $listado    = [];
+
+        $tcancele    = 0; $tcancelt    = 0; $tdolares = 0; $ttransf  = 0;
+        $tpesos      = 0; $tpeso_tranf = 0; $teuros   = 0; $tcredito = 0;
+        $tcancelaUSD = 0; $ttotalventa = 0;    // Variables para totales
+
         if(isset($ventas))
             foreach ($ventas as $venta) {
 
@@ -1605,28 +1534,52 @@ class HomeController extends Controller
                 if(!isset($listado[$venta->nrounico]['totalventa']))
                     $listado[$venta->nrounico]['totalventa'] =0;
                 $listado[$venta->nrounico]['totalventa'] = $venta->totalventa;
+
+                // Acumular totales
+                $tcancele    += $venta->cancele;
+                $tcancelt    += $venta->cancelt;
+                $tdolares    += $venta->dolares;
+                $ttransf     += $venta->transf;
+                $tpesos      += $venta->pesos;
+                $tpeso_tranf += $venta->peso_tranf;
+                $teuros      += $venta->euros;
+                $tcredito    += $venta->credito;
+                $tcancelaUSD += $venta->cancelaUSD;
+                $ttotalventa += $venta->totalventa;
             }
 
 
         $cobranzas = Saacxcw::selectRaw("(cancele - (dolares*tasadolar)) as cancele, codusua, (cancelt - (dolar_tranf*tasadolar)) as cancelt, dolar_tranf as transf, dolares, codclie,
-          date_format(FechaT, '%d/%m/%Y') as fecha, codvend, Document, nrounico, euros,cancelausd,
-        tasadolar, pesos, peso_tranf, tasapeso, numerod, tipocxc, montodolares, fk_sucursal ")
+          date_format(FechaT, '%d/%m/%Y') as fecha, CodVend, Document, nrounico, euros,cancelausd, codesta,
+        tasadolar, pesos, peso_tranf, tasapeso, numerod, tipocxc, montodolares, fk_sucursal, CodClie ")
             ->with([ 'cliente',
                 'sucursal.comercial:id',
             ])
-            ->whereRaw("fk_sucursal in ($arraysucursales)")
             ->whereRaw(" (tipocxc = 50 or EsUnPago = 1)  and fk_sucursal = $fksucursal")
+            ->whereRaw(" (tipocxc not in( '99','98')) ")
+            ->whereRaw("fk_sucursal in ($arraysucursales)")
             ->whereBetween('fechat', [$fec1.' 00:00:00.00', $fec2.' 23:58:22.00'])
             ->whereHas('sucursal.comercial', function ($q) use ($comercialid) {
                 $q->where('fk_comercial', $comercialid);
-            })
-            ->get();
+            });
+
+        if(isset($fkestacion) and $fkestacion !='') {
+            $cobranzas = $cobranzas->whereRaw(" codesta = '$fkestacion'");
+        }
+
+        $cobranzas = $cobranzas->get();
+
         $listadoc = [];
+        // Variables para totales de cobranzas
+        $tcancelec    = 0; $tcanceltc    = 0; $tdolaresc = 0; $ttransfc     = 0;
+        $tpesosc      = 0; $tpeso_tranfc = 0; $teurosc   = 0; $tcancelausdc = 0;
+        $ttotalventac = 0;
+
         if(isset($cobranzas))
             foreach ($cobranzas as $cobranza) {
                 if(!isset($listadoc[$cobranza->nrounico]['codclie']))
                     $listadoc[$cobranza->nrounico]['codclie'] ='';
-                $listadoc[$cobranza->nrounico]['codclie'] = $cobranza->codclie;
+                $listadoc[$cobranza->nrounico]['codclie'] = $cobranza->CodClie;
 
                 if(!isset($listadoc[$cobranza->nrounico]['fksucu']))
                     $listadoc[$cobranza->nrounico]['fksucu'] ='';
@@ -1642,7 +1595,7 @@ class HomeController extends Controller
 
                 if(!isset($listadoc[$cobranza->nrounico]['cliente']))
                     $listadoc[$cobranza->nrounico]['cliente'] ='';
-                $listadoc[$cobranza->nrounico]['cliente'] = (isset($cobranza->cliente->descrip))? $cobranza->cliente->descrip : '--';
+                $listadoc[$cobranza->nrounico]['cliente'] = $cobranza->cliente->descrip ?? '';
 
                 if(!isset($listadoc[$cobranza->nrounico]['pesos']))
                     $listadoc[$cobranza->nrounico]['pesos'] =0;
@@ -1675,9 +1628,20 @@ class HomeController extends Controller
                 if(!isset($listadoc[$cobranza->nrounico]['totalcobranza']))
                     $listadoc[$cobranza->nrounico]['totalcobranza'] =0;
                 $listadoc[$cobranza->nrounico]['totalcobranza'] = $cobranza->montodolares;
+
+                // Acumular totales de cobranzas
+                $tcancelec    += ($cobranza->cancele > 1) ? $cobranza->cancele : 0;
+                $tcanceltc    += ($cobranza->cancelt > 1) ? $cobranza->cancelt : 0;
+                $tdolaresc    += $cobranza->dolares;
+                $ttransfc     += $cobranza->transf;
+                $tpesosc      += $cobranza->pesos;
+                $tpeso_tranfc += $cobranza->peso_tranf;
+                $teurosc      += $cobranza->euros;
+                $tcancelausdc += $cobranza->cancelausd;
+                $ttotalventac += $cobranza->montodolares;
             }
 
-        $topprod = Saitemfac::whereIn('TipoFac', ['A', 'B','Z', 'W'])
+        $topprod = Saitemfac::whereIn('TipoFac', ['Z', 'W'])
             ->selectRaw("CodItem, SUM(Cantidad * Signo) as salidas ")
             ->where('esserv', 0)
             ->whereRaw("fk_sucursal in ($arraysucursales)")
@@ -1696,10 +1660,315 @@ class HomeController extends Controller
                 $q->whereRaw("safact.credito > 0 and safact.fk_sucursal = $fksucursal");
             });
         }
+
+        if(isset($fkestacion) and $fkestacion !='') {
+            $topprod = $topprod->whereHas('factura', function ($q) use ($fkestacion) {
+                $q->whereRaw("  safact.codesta = '$fkestacion'");
+            });
+        }
         $topprod = $topprod->get();
 
-        //dd($topprod->toSql(), $topprod->getBindings());
-        return view('reporteventasucursal', compact('fechasreport','listadoc', 'topprod', 'ventas', 'fecha1', 'fecha2', 'listado'))->render();
+        if($fec1 != ''){
+
+            $montos = Saipavta::select([
+                'saipavta.fk_sucursal',
+                'saipavta.TipoFac',
+                'saipavta.NumeroD',
+                'saipavta.Descrip',
+                'b.codtarj',
+                'f.codoper',
+                'b.clase',
+                DB::raw("(CASE f.TipoFac WHEN 'Z' THEN saipavta.monto WHEN 'W' THEN (saipavta.monto * -1) ELSE 0 END) as bs"),
+                DB::raw("b.descrip as tarjeta"),
+                DB::raw("c.descrip as sucursal")
+            ])
+                ->with('factura')
+                ->join('satarj as b', 'CodPago', '=', 'b.codtarj')
+                ->join('sasucursal as c', 'saipavta.fk_sucursal', '=', 'c.id')
+                ->join('safact as f', function($join) {
+                    $join->on('saipavta.NumeroD',     '=', 'f.NumeroD')
+                        ->on('saipavta.TipoFac',     '=', 'f.TipoFac')
+                        ->on('saipavta.fk_sucursal', '=', 'f.fk_sucursal');
+                })
+                ->where('b.bs', 1)
+                ->whereRaw("saipavta.fk_sucursal in ($arraysucursales)")
+                ->where('b.comercial', $comercialid)
+                ->where('saipavta.fk_sucursal', $fksucursal)
+                ->where('c.fk_comercial', $comercialid)
+                ->whereBetween('saipavta.fechae', [
+                    Carbon::parse($fec1)->startOfDay()->format('Y-m-d H:i:s'),
+                    Carbon::parse($fec2)->endOfDay()->format('Y-m-d H:i:s')
+                ]);
+
+            if(isset($codoper) and $codoper != '' and $codoper > 0){
+                $montos = $montos->where('f.codoper', $codoper);
+            }
+
+            $montos = $montos->orderBy('saipavta.NumeroD')->get();
+
+
+        }
+
+        $sucursales = [];
+        $lines      = [];
+        $tarjetasbs = [];
+        $tarjetasus = [];
+
+        $transacciones = 0;
+
+        if(isset($montos) and count($montos)> 0 )
+            foreach ($montos as $monto) {
+                $transacciones ++;
+                $line = [
+                    'doc'     => 'Fac',
+                    'sucu'    => $monto->sucursal,
+                    'fk_sucu' => $monto->fk_sucursal,
+                    'codtarj' => $monto->codtarj,
+                    'Descrip' => $monto->Descrip,
+                    'cliente' => $monto->factura->Descrip,
+                    'monto'   => $monto->bs,
+                    'TipoFac' => (isset($monto->TipoFac))? $monto->TipoFac: '',
+                    'documen' => (isset($monto->NumeroD))? $monto->NumeroD: '',
+                    'codoper' => (isset($monto->codoper))? $monto->codoper: '',
+                ];
+
+                if(!isset($tarjetasbs[$monto->codtarj])){
+                    $tarjetasbs[$monto->codtarj] = $monto->tarjeta;
+                }
+
+                if(!isset($lines[$monto->codtarj])){
+                    $lines[$monto->codtarj]  = [];
+                }
+
+                array_push($lines[$monto->codtarj], $line);
+            }
+
+        $montos = [];
+
+        if($fec1 != '') {
+
+            $montos = Saipacxcw::
+            select([
+                'saipacxcw.fk_sucursal', 'b.codtarj', 'b.clase', 'saipacxcw.NroPpal',
+                'saipacxcw.Descrip',
+                'saipacxcw.codclie',
+                DB::raw(' (saipacxcw.monto) as bs'),
+                DB::raw("b.descrip as tarjeta"),
+                DB::raw("c.descrip as sucursal"),
+                DB::raw("e.descrip as nombrecliente")
+            ])
+                ->join('satarj as b'    , 'saipacxcw.CodPago'    , '=', 'b.codtarj')
+                ->join('sasucursal as c', 'saipacxcw.fk_sucursal', '=', 'c.id')
+                ->join('saacxcw as d'    , 'saipacxcw.NroPpal'    , '=', 'd.nrounico')
+                ->join('saclie as e'    , 'd.codclie'    , '=', 'e.codclie')
+                ->where('c.fk_comercial', $comercialid)
+                ->whereRaw("d.tipocxc not in ('99','98') and d.fk_sucursal = saipacxcw.fk_sucursal")
+                ->whereRaw("saipacxcw.fk_sucursal in ($arraysucursales)")
+                ->where('saipacxcw.fk_sucursal', $fksucursal)
+                ->with('cxc')
+                ->where('b.bs', 1)
+                ->where('b.comercial', $comercialid)
+                ->whereBetween('saipacxcw.created_at', [
+                    Carbon::parse($fec1)->startOfDay()->format('Y-m-d H:i:s'),
+                    Carbon::parse($fec2)->endOfDay()->format('Y-m-d H:i:s')
+                ]);
+
+            // Filtrar por codoper
+            if(isset($codoper) and $codoper != '' and $codoper > 0){
+                $montos = $montos->where('d.codoper', $codoper);
+            }
+            $montos = $montos->orderBy('saipacxcw.NroPpal')->get();
+
+        }
+
+        if(isset($montos) and count($montos)> 0 )
+            foreach ($montos as $monto) {
+                $transacciones ++;
+                $line = [
+                    'doc'     => 'Cxc',
+                    'sucu'    => $monto->sucursal,
+                    'fk_sucu' => $monto->fk_sucursal,
+                    'codtarj' => $monto->codtarj,
+                    'Descrip' => $monto->Descrip,
+                    'cliente' => (isset($monto->nombrecliente))?$monto->nombrecliente : '',
+                    'monto'   => $monto->bs,
+                    'TipoFac' => '',
+                    'documen' => (isset($monto->cxc->NumeroD))? $monto->cxc->NumeroD: '',
+                    'codoper' => $monto->codoper ?? '',
+                ];
+
+                if(!isset($tarjetasbs[$monto->codtarj])){
+                    $tarjetasbs[$monto->codtarj] = $monto->tarjeta;
+                }
+
+                if(!isset($lines[$monto->codtarj])){
+                    $lines[$monto->codtarj]  = [];
+                }
+
+                array_push($lines[$monto->codtarj], $line);
+
+            }
+
+
+        $linesdol = [];
+
+        if($fec1 != ''){
+
+            $montos = Saipavta::select([
+                'saipavta.id',
+                'saipavta.fk_sucursal',
+                'saipavta.TipoFac',
+                'saipavta.NumeroD',
+                'saipavta.Descrip',
+                'b.codtarj',
+                'f.codoper',
+                'b.clase',
+                DB::raw("(CASE f.TipoFac WHEN 'Z' THEN saipavta.dolares WHEN 'W' THEN (saipavta.dolares * -1) ELSE 0 END) as dolares"),
+                DB::raw("b.descrip as tarjeta"),
+                DB::raw("c.descrip as sucursal")
+            ])
+                ->with('factura')
+                ->join('satarj as b', 'CodPago', '=', 'b.codtarj')
+                ->join('sasucursal as c', 'saipavta.fk_sucursal', '=', 'c.id')
+                ->join('safact as f', function($join) {
+                    $join->on('saipavta.NumeroD',     '=', 'f.NumeroD')
+                        ->on('saipavta.TipoFac',     '=', 'f.TipoFac')
+                        ->on('saipavta.fk_sucursal', '=', 'f.fk_sucursal');
+                })
+                ->where('b.dolares', 1)
+                ->whereRaw("saipavta.fk_sucursal in ($arraysucursales)")
+                ->where('b.comercial', $comercialid)
+                ->where('saipavta.fk_sucursal', $fksucursal)
+                ->where('c.fk_comercial', $comercialid)
+                ->whereBetween('saipavta.fechae', [
+                    Carbon::parse($fec1)->startOfDay()->format('Y-m-d H:i:s'),
+                    Carbon::parse($fec2)->endOfDay()->format('Y-m-d H:i:s')
+                ]);
+
+            if(isset($codoper) and $codoper != '' and $codoper > 0){
+                $montos = $montos->where('f.codoper', $codoper);
+            }
+
+            $montos = $montos->orderBy('saipavta.NumeroD','asc')->get();
+
+
+        }
+
+        if(isset($montos) and count($montos)> 0 )
+            foreach ($montos as $monto) {
+                $transacciones ++;
+                $line = [
+                    'doc'     => 'Fac',
+                    'sucu'    => $monto->sucursal,
+                    'fk_sucu' => $monto->fk_sucursal,
+                    'codtarj' => $monto->codtarj,
+                    'Descrip' => $monto->Descrip,
+                    'cliente' => $monto->factura->Descrip,
+                    'monto'   => $monto->dolares,
+                    'TipoFac' => (isset($monto->TipoFac))? $monto->TipoFac: '',
+                    'documen' => (isset($monto->NumeroD))? $monto->NumeroD: '',
+                    'codoper' => (isset($monto->codoper))? $monto->codoper: '',
+                ];
+
+                if(!isset($tarjetasus[$monto->codtarj])){
+                    $tarjetasus[$monto->codtarj] = $monto->tarjeta;
+                }
+
+                if(!isset($linesdol[$monto->codtarj])){
+                    $linesdol[$monto->codtarj]  = [];
+                }
+
+                array_push($linesdol[$monto->codtarj], $line);
+            }
+
+        $montos = [];
+
+        if($fec1 != '') {
+
+            $montos = Saipacxcw::
+            select([
+                'saipacxcw.fk_sucursal', 'b.codtarj', 'b.clase', 'saipacxcw.NroPpal',
+                'saipacxcw.Descrip',
+                'saipacxcw.codclie',
+                DB::raw(' (saipacxcw.dolares) as dolares'),
+                DB::raw("b.descrip as tarjeta"),
+                DB::raw("c.descrip as sucursal"),
+                DB::raw("e.descrip as nombrecliente")
+            ])
+                ->join('satarj as b'    , 'saipacxcw.CodPago'    , '=', 'b.codtarj')
+                ->join('sasucursal as c', 'saipacxcw.fk_sucursal', '=', 'c.id')
+                ->join('saacxcw as d'    , 'saipacxcw.NroPpal'    , '=', 'd.nrounico')
+                ->join('saclie as e'    , 'd.codclie'    , '=', 'e.codclie')
+                ->where('c.fk_comercial', $comercialid)
+                ->whereRaw("d.tipocxc not in ('99','98') and d.fk_sucursal = saipacxcw.fk_sucursal")
+                ->whereRaw("saipacxcw.fk_sucursal in ($arraysucursales)")
+                ->with('cxc')
+                ->where('saipacxcw.fk_sucursal', $fksucursal)
+                ->where('b.dolares', 1)
+                ->where('b.comercial', $comercialid)
+                ->whereBetween('saipacxcw.created_at', [
+                    Carbon::parse($fec1)->startOfDay()->format('Y-m-d H:i:s'),
+                    Carbon::parse($fec2)->endOfDay()->format('Y-m-d H:i:s')
+                ]);
+
+
+            // Filtrar por codoper
+            if(isset($codoper) and $codoper != '' and $codoper > 0){
+                $montos = $montos->where('d.codoper', $codoper);
+            }
+            $montos = $montos->orderBy('saipacxcw.NroPpal')->get();
+
+        }
+
+        if(isset($montos) and count($montos)> 0 )
+            foreach ($montos as $monto) {
+                $transacciones ++;
+                $line = [
+                    'doc'     => 'Cxc',
+                    'sucu'    => $monto->sucursal,
+                    'fk_sucu' => $monto->fk_sucursal,
+                    'codtarj' => $monto->codtarj,
+                    'Descrip' => $monto->Descrip,
+                    'cliente' => (isset($monto->nombrecliente))?$monto->nombrecliente : '',
+                    'monto'   => $monto->dolares,
+                    'TipoFac' => '',
+                    'documen' => (isset($monto->cxc->NumeroD))? $monto->cxc->NumeroD: '',
+                    'codoper' => $monto->codoper ?? '',
+                ];
+
+                if(!isset($tarjetasus[$monto->codtarj])){
+                    $tarjetasus[$monto->codtarj] = $monto->tarjeta;
+                }
+
+                if(!isset($linesdol[$monto->codtarj])){
+                    $linesdol[$monto->codtarj]  = [];
+                }
+
+                array_push($linesdol[$monto->codtarj], $line);
+
+            }
+
+        return view('reporteventasucursal', compact(
+            'fechasreport',
+            'listadoc',
+            'topprod',
+            'ventas',
+            'fksucursal',
+            'fecha1',
+            'lines',
+            'linesdol',
+            'fecha2',
+            'tarjetasbs',
+            'tarjetasus',
+            'sucursales',
+            'listado',
+            'tcancele', 'tcancelt', 'tdolares', 'ttransf',
+            'tpesos', 'tpeso_tranf', 'teuros', 'tcredito',
+            'tcancelaUSD', 'ttotalventa',
+            'tcancelec', 'tcanceltc', 'tdolaresc', 'ttransfc',
+            'tpesosc', 'tpeso_tranfc', 'teurosc', 'tcancelausdc',
+            'ttotalventac'
+        ));
     }
 
     public function index(Request $request)
