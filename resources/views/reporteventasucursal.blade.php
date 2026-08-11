@@ -450,7 +450,7 @@
                                             @php $totalinst += $line['monto']; @endphp
                                             <tr>
                                                 <td class="tdline"> {{$line['sucu']}}</td>
-                                                <td class="tdline">{{$line['cliente']}}<small class="text-muted">{{$line['Descrip']}} </small></td>
+                                                <td class="tdline">{{$line['cliente']}}<br><small class="text-muted">{{$line['Descrip']}} </small></td>
                                                 <td class="tdline">
                                                     @if($line['doc'] == 'Fac')
                                                         <span class="badge-fac">Factura</span>
@@ -540,7 +540,7 @@
                                             @php $totalinst += $line['monto']; @endphp
                                             <tr>
                                                 <td class="tdline"> {{$line['sucu']}}</td>
-                                                <td class="tdline">{{$line['cliente']}} <small class="text-muted">{{$line['Descrip']}} </small></td>
+                                                <td class="tdline">{{$line['cliente']}}<br> <small class="text-muted">{{$line['Descrip']}} </small></td>
                                                 <td class="tdline">
                                                     @if($line['doc'] == 'Fac')
                                                         <span class="badge-fac">Factura</span>
@@ -629,7 +629,7 @@
                                             @php $totalinst += $line['monto']; @endphp
                                             <tr>
                                                 <td class="tdline"> {{$line['sucu']}}</td>
-                                                <td class="tdline">{{$line['cliente']}}<small class="text-muted">{{$line['Descrip']}} </small></td>
+                                                <td class="tdline">{{$line['cliente']}}<br><small class="text-muted">{{$line['Descrip']}} </small></td>
                                                 <td class="tdline">
                                                     @if($line['doc'] == 'Fac')
                                                         <span class="badge-fac">Factura</span>
