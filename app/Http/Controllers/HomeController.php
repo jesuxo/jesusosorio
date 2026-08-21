@@ -424,8 +424,8 @@ class HomeController extends Controller
 
         foreach ($items as $prod){
 
-           /* if(!isset($prod->producto->instancia->padre->codinst))
-                dd($prod->producto);*/
+            if(!isset($prod->producto->instancia->padre->codinst))
+                dd($prod->producto);
             if(!isset($instanciaspadre[$prod->producto->instancia->padre->codinst])) $instanciaspadre[$prod->producto->instancia->padre->codinst] = $prod->producto->instancia->padre->descrip;
             if(!isset($ventainspadre[$prod->producto->instancia->padre->codinst])) $ventainspadre[$prod->producto->instancia->padre->codinst] = 0;
             if(!isset($ventainsprodsucu[$prod->producto->codinst][$prod->fk_sucursal])) $ventainsprodsucu[$prod->producto->codinst][$prod->fk_sucursal] = 0;
