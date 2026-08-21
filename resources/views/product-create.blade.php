@@ -66,7 +66,16 @@
                                         id="choices-category-input" name="codinst">
                                     <option value=""> Seleccionar </option>
                                     @foreach($instancias as $instancia)
-                                        <option style="margin-left: {{($instancia->nivel-1) * 14}}px !important;" value="{{$instancia->codinst}}">{!! $instancia->label !!}</option>
+                                        @if($instancia->insPadre > 0)
+                                            <script>
+                                                document.querySelector('#padre{{$instancia->insPadre}}').disabled = true;
+                                                $('#padre{{$instancia->insPadre}}').addClass('tituloinsta');
+                                            </script>
+                                        @endif
+                                        <option id="padre{{$instancia->codinst}}" style="margin-left: {{($instancia->nivel-1) * 14}}px !important;"
+                                                value="{{$instancia->codinst}}">
+                                            {!! $instancia->label !!}
+                                        </option>
                                     @endforeach
                                 </select>
                             </div>
