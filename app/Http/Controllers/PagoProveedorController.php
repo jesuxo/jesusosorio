@@ -3,7 +3,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\ReporteFacturasExport;
 use App\Exports\ResumenPagosExport;
+use App\Models\FacturaProveedor;
 use App\Models\PagoProveedor;
 use App\Models\PagoProveedorDetalle;
 use App\Models\PagoComprobante;
@@ -19,6 +21,112 @@ use Maatwebsite\Excel\Excel;
 
 class PagoProveedorController extends Controller
 {
+    public function reporteFacturas(Request $request)
+    {
+        $fecha_desde = $request->fecha_desde ?? date('Y-m-01');
+        $fecha_hasta = $request->fecha_hasta ?? date('Y-m-d');
+        $proveedor = $request->proveedor ?? '';
+        $numero_factura = $request->numero_factura ?? '';
+
+        $query = FacturaProveedor::with(['pago', 'pagoDetalle', 'pago.proveedor'])
+            ->whereBetween('fecha_factura', [$fecha_desde, $fecha_hasta]);
+
+        if ($proveedor) {
+            $query->whereHas('pago', function($q) use ($proveedor) {
+                $q->where('codprov', $proveedor);
+            });
+        }
+
+        if ($numero_factura) {
+            $query->where('numero_factura', 'like', "%{$numero_factura}%");
+        }
+
+        $facturas = $query->orderBy('fecha_factura', 'desc')
+            ->orderBy('numero_factura', 'asc')
+            ->get();
+
+        // Estadísticas
+        $estadisticas = [
+            'total_facturas' => $facturas->count(),
+            'total_motos' => $facturas->sum('cantidad_facturada'),
+            'total_monto' => $facturas->sum('monto_facturado'),
+            'total_proveedores' => $facturas->groupBy('pago.codprov')->count()
+        ];
+
+        // Agrupar por proveedor
+        $porProveedor = $facturas->groupBy(function($item) {
+            return $item->pago->proveedor->descrip ?? $item->pago->codprov ?? 'Sin proveedor';
+        });
+
+        // Proveedores para el filtro
+        $proveedores = Saprov::where('pagomotos', 1)->orderBy('descrip')->get();
+
+        $view = view('pagos-proveedores.reporte-facturas', compact(
+            'facturas',
+            'estadisticas',
+            'porProveedor',
+            'fecha_desde',
+            'fecha_hasta',
+            'proveedor',
+            'numero_factura',
+            'proveedores'
+        ))->render();
+
+        if ($request->ajax()) {
+            return response()->json(['html' => $view]);
+        }
+
+        return view('pagos-proveedores.reporte-facturas', compact(
+            'facturas',
+            'estadisticas',
+            'porProveedor',
+            'fecha_desde',
+            'fecha_hasta',
+            'proveedor',
+            'numero_factura',
+            'proveedores'
+        ));
+    }
+
+// Exportar reporte a Excel
+    public function exportarReporteFacturas(Request $request)
+    {
+        $fecha_desde = $request->fecha_desde ?? date('Y-m-01');
+        $fecha_hasta = $request->fecha_hasta ?? date('Y-m-d');
+        $proveedor = $request->proveedor ?? '';
+
+        $query = FacturaProveedor::with(['pago', 'pagoDetalle', 'pago.proveedor'])
+            ->whereBetween('fecha_factura', [$fecha_desde, $fecha_hasta]);
+
+        if ($proveedor) {
+            $query->whereHas('pago', function($q) use ($proveedor) {
+                $q->where('codprov', $proveedor);
+            });
+        }
+
+        $facturas = $query->orderBy('fecha_factura', 'desc')
+            ->orderBy('numero_factura', 'asc')
+            ->get();
+
+        $data = [];
+        foreach ($facturas as $factura) {
+            $data[] = [
+                'N° Factura' => $factura->numero_factura,
+                'Fecha Factura' => $factura->fecha_factura->format('d/m/Y'),
+                'Proveedor' => $factura->pago->proveedor->descrip ?? $factura->pago->codprov ?? 'N/A',
+                'Producto' => $factura->pagoDetalle->producto_descrip ?? 'N/A',
+                'Cantidad' => $factura->cantidad_facturada,
+                'Monto Unitario' => $factura->monto_facturado / $factura->cantidad_facturada,
+                'Monto Total' => $factura->monto_facturado,
+                'Pedido' => $factura->pago->folio ?? 'N/A',
+                'N° Aprobación' => $factura->pago->numero_aprobacion ?? '',
+                'Notas' => $factura->notas ?? ''
+            ];
+        }
+
+        return Excel::download(new ReporteFacturasExport($data), 'reporte_facturas_' . now()->format('Y-m-d') . '.xlsx');
+    }
+
     public function index(Request $request)
     {
         $estado      = (isset($request->estado))? $request->estado : 'pendiente ';
@@ -205,25 +313,55 @@ class PagoProveedorController extends Controller
     {
         $pago = PagoProveedor::findOrFail($id);
 
+        $request->validate([
+            'productos_actualizar' => 'nullable|array',
+            'productos_actualizar.*.id' => 'exists:pagos_proveedores_detalles,id',
+            'productos_actualizar.*.cantidad' => 'integer|min:1',
+            'productos_actualizar.*.cantidad_facturada' => 'integer|min:0',
+            'productos_actualizar.*.precio_unitario' => 'numeric|min:0',
+            'productos_nuevos' => 'nullable|array',
+            'productos_nuevos.*.producto_id' => 'exists:saprod,id',
+            'productos_nuevos.*.cantidad' => 'integer|min:1',
+            'productos_nuevos.*.cantidad_facturada' => 'integer|min:0',
+            'productos_nuevos.*.precio_unitario' => 'numeric|min:0',
+            'productos_eliminar' => 'nullable|array',                          // NUEVO
+            'productos_eliminar.*' => 'exists:pagos_proveedores_detalles,id',  // NUEVO
+        ]);
+
         DB::beginTransaction();
 
         try {
-            // NUEVO: Eliminar productos que ya no están
+            // ============ NUEVO: ELIMINAR PRODUCTOS QUE YA NO ESTÁN ============
             if ($request->has('productos_eliminar') && is_array($request->productos_eliminar)) {
                 foreach ($request->productos_eliminar as $detalleId) {
                     $detalle = PagoProveedorDetalle::find($detalleId);
+
                     if ($detalle && $detalle->pago_id == $pago->id) {
-                        // Opcional: validar que no tenga unidades recibidas
+                        // Validar que no tenga unidades recibidas
                         if ($detalle->cantidad_recibida > 0) {
-                            throw new \Exception("No se puede eliminar el producto {$detalle->producto_descrip} porque ya tiene unidades recibidas");
+                            throw new \Exception("No se puede eliminar el producto '{$detalle->producto_descrip}' porque ya tiene {$detalle->cantidad_recibida} unidades recibidas");
                         }
+
+                        // Eliminar facturas asociadas y sus archivos físicos
+                        foreach ($detalle->facturas as $factura) {
+                            if ($factura->archivo_path) {
+                                $rutaArchivo = public_path($factura->archivo_path);
+                                if (file_exists($rutaArchivo)) {
+                                    unlink($rutaArchivo);
+                                }
+                            }
+                            $factura->delete();
+                        }
+
+                        // Eliminar el detalle
                         $detalle->delete();
                     }
                 }
             }
+            // ============ FIN NUEVO ============
 
             // Actualizar productos existentes
-            foreach ($request->productos_actualizar as $producto) {
+            foreach ($request->productos_actualizar ?? [] as $producto) {
                 $detalle = PagoProveedorDetalle::find($producto['id']);
                 if ($detalle && $detalle->pago_id == $pago->id) {
                     $detalle->cantidad = $producto['cantidad'];
@@ -235,19 +373,21 @@ class PagoProveedorController extends Controller
             }
 
             // Crear nuevos productos
-            foreach ($request->productos_nuevos as $producto) {
-                $prod = Saprod::where('codprod', $producto['producto_codprod'])->where('comercial', 1)->first();
+            foreach ($request->productos_nuevos ?? [] as $producto) {
+                $prod = Saprod::where('codprod', $producto['producto_codprod'])
+                    ->where('comercial', 1)
+                    ->first();
 
                 PagoProveedorDetalle::create([
-                    'pago_id'           => $pago->id,
-                    'producto_id'       => $producto['producto_id'],
-                    'producto_codprod'  => $prod ? $prod->codprod : $producto['producto_codprod'],
-                    'producto_descrip'  => $producto['producto_descrip'],
-                    'cantidad'          => $producto['cantidad'],
-                    'cantidad_recibida' => 0,
+                    'pago_id'            => $pago->id,
+                    'producto_id'        => $producto['producto_id'],
+                    'producto_codprod'   => $prod ? $prod->codprod : $producto['producto_codprod'],
+                    'producto_descrip'   => $producto['producto_descrip'],
+                    'cantidad'           => $producto['cantidad'],
+                    'cantidad_recibida'  => 0,
                     'cantidad_facturada' => $producto['cantidad_facturada'] ?? 0,
-                    'precio_unitario'   => $producto['precio_unitario'],
-                    'subtotal'          => $producto['cantidad'] * $producto['precio_unitario']
+                    'precio_unitario'    => $producto['precio_unitario'],
+                    'subtotal'           => $producto['cantidad'] * $producto['precio_unitario']
                 ]);
             }
 
@@ -289,7 +429,7 @@ class PagoProveedorController extends Controller
 
     public function getProductos($id)
     {
-        $pago = PagoProveedor::with('detalles')->findOrFail($id);
+        $pago = PagoProveedor::with(['detalles.facturas'])->findOrFail($id);
 
         return response()->json([
             'success' => true,
@@ -299,14 +439,180 @@ class PagoProveedorController extends Controller
                     'producto_id'        => $detalle->producto_id,
                     'producto_codprod'   => $detalle->producto_codprod,
                     'producto_descrip'   => $detalle->producto_descrip,
-                    'cantidad'           => $detalle->cantidad,
-                    'cantidad_facturada' => $detalle->cantidad_facturada ?? 0,
-                    'cantidad_recibida'  => $detalle->cantidad_recibida,
-                    'precio_unitario'    => $detalle->precio_unitario,
-                    'subtotal'           => $detalle->subtotal
+                    'cantidad'           => (int) $detalle->cantidad,
+                    'cantidad_recibida'  => (int) $detalle->cantidad_recibida,
+                    'cantidad_facturada' => (int) $detalle->cantidad_facturada,
+                    'pendiente_facturar' => (int) ($detalle->cantidad - $detalle->cantidad_facturada),
+                    'facturas'           => $detalle->facturas->map(function($factura) {
+                        return [
+                            'id' => (int) $factura->id,
+                            'numero_factura' => $factura->numero_factura ?? '',
+                            'fecha_factura' => $factura->fecha_factura ? $factura->fecha_factura->format('Y-m-d') : '',
+                            'cantidad_facturada' => (int) $factura->cantidad_facturada,
+                            'monto_facturado' => (float) $factura->monto_facturado, // ← Asegurar que es float
+                            'archivo_path' => $factura->archivo_path ?? null
+                        ];
+                    }),
+                    'precio_unitario'    => (float) $detalle->precio_unitario,
+                    'subtotal'           => (float) $detalle->subtotal
                 ];
             })
         ]);
+    }
+
+    public function agregarFactura(Request $request, $detalleId)
+    {
+        $detalle = PagoProveedorDetalle::findOrFail($detalleId);
+
+        $request->validate([
+            'numero_factura' => 'required|string|max:50',
+            'fecha_factura' => 'required|date',
+            'cantidad_facturada' => 'required|integer|min:1',
+            'monto_facturado' => 'required|numeric|min:0',
+            'notas' => 'nullable|string',
+            'archivo' => 'nullable|file|mimes:jpeg,png,jpg,gif,pdf|max:10240'
+        ]);
+
+        // Verificar que no exceda la cantidad pendiente
+        $pendienteFacturar = $detalle->cantidad - $detalle->cantidad_facturada;
+        if ($request->cantidad_facturada > $pendienteFacturar) {
+            return response()->json([
+                'success' => false,
+                'error' => "La cantidad a facturar ({$request->cantidad_facturada}) excede lo pendiente por facturar ({$pendienteFacturar})"
+            ], 400);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // 1. Guardar la factura en la tabla de historial
+            $data = $request->only([
+                'numero_factura',
+                'fecha_factura',
+                'cantidad_facturada',
+                'monto_facturado',
+                'notas'
+            ]);
+
+            $data['pago_detalle_id'] = $detalle->id;
+            $data['pago_id'] = $detalle->pago_id;
+
+            if ($request->hasFile('archivo')) {
+                $archivo = $request->file('archivo');
+                $extension = strtolower($archivo->getClientOriginalExtension());
+                $uploadPath = public_path('uploads/facturas');
+
+                if (!file_exists($uploadPath)) {
+                    mkdir($uploadPath, 0777, true);
+                }
+
+                $nombre_archivo = time() . '_' . uniqid() . '.' . $extension;
+                $archivo->move($uploadPath, $nombre_archivo);
+                $data['archivo_path'] = 'uploads/facturas/' . $nombre_archivo;
+            }
+
+            FacturaProveedor::create($data);
+
+            // 2. ACTUALIZAR cantidad_facturada en el detalle (el incremento que usabas antes)
+            $detalle->cantidad_facturada += $request->cantidad_facturada;
+            $detalle->save();
+
+            // 3. Actualizar el estado del pago
+            $detalle->pago->actualizarEstado();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Factura registrada correctamente',
+                'nueva_cantidad_facturada' => $detalle->cantidad_facturada
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al registrar factura: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function eliminarFactura($facturaId)
+    {
+        $factura = FacturaProveedor::findOrFail($facturaId);
+
+        // Obtener el detalle antes de eliminar
+        $detalle = PagoProveedorDetalle::find($factura->pago_detalle_id);
+
+        if (!$detalle) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Detalle de pago no encontrado'
+            ], 404);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // 1. Restar la cantidad facturada del detalle
+            $detalle->cantidad_facturada -= $factura->cantidad_facturada;
+            if ($detalle->cantidad_facturada < 0) {
+                $detalle->cantidad_facturada = 0;
+            }
+            $detalle->save();
+
+            // 2. Eliminar archivo físico si existe
+            if ($factura->archivo_path) {
+                $rutaArchivo = public_path($factura->archivo_path);
+                if (file_exists($rutaArchivo)) {
+                    unlink($rutaArchivo);
+                }
+            }
+
+            // 3. Eliminar el registro de factura
+            $factura->delete();
+
+            // 4. Actualizar estado del pago
+            $detalle->pago->actualizarEstado();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Factura eliminada correctamente',
+                'nueva_cantidad_facturada' => $detalle->cantidad_facturada
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al eliminar factura: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function getFacturas($id)
+    {
+        $pago = PagoProveedor::with(['detalles.facturas'])->findOrFail($id);
+
+        $facturas = FacturaProveedor::where('pago_id', $id)
+            ->with('pagoDetalle')
+            ->orderBy('fecha_factura', 'desc')
+            ->get();
+
+        // Estadísticas rápidas
+        $totalFacturado = $pago->detalles->sum('cantidad_facturada');
+        $montoTotalFacturado = $facturas->sum('monto_facturado');
+
+        $view = view('pagos-proveedores.partials.lista-facturas', compact(
+            'pago',
+            'facturas',
+            'totalFacturado',
+            'montoTotalFacturado'
+        ))->render();
+
+        return response()->json(['html' => $view]);
     }
 
     public function update(Request $request, $id)

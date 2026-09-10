@@ -669,17 +669,31 @@
                     if (data.success) {
                         productosTemporales = data.productos.map(p => ({
                             producto_id: p.producto_id,
-                            producto_codprod: p.producto_codprod,
-                            producto_descrip: p.producto_descrip,
-                            cantidad: p.cantidad,
-                            cantidad_facturada: p.cantidad_facturada || 0,
-                            precio_unitario: p.precio_unitario,
-                            subtotal: p.cantidad * p.precio_unitario,
-                            id: p.id
+                            producto_codprod: p.producto_codprod || '',
+                            producto_descrip: p.producto_descrip || '',
+                            cantidad: parseInt(p.cantidad) || 0,
+                            cantidad_recibida: parseInt(p.cantidad_recibida) || 0,
+                            cantidad_facturada: parseInt(p.cantidad_facturada) || 0,
+                            facturas: (p.facturas || []).map(f => ({
+                                id: parseInt(f.id) || 0,
+                                numero_factura: f.numero_factura || '',
+                                fecha_factura: f.fecha_factura || '',
+                                cantidad_facturada: parseInt(f.cantidad_facturada) || 0,
+                                monto_facturado: parseFloat(f.monto_facturado) || 0,
+                                archivo_path: f.archivo_path || null
+                            })),
+                            precio_unitario: parseFloat(p.precio_unitario) || 0,
+                            subtotal: parseFloat(p.subtotal) || 0,
+                            id: parseInt(p.id) || 0
                         }));
 
                         // NUEVO: Guardar IDs originales para detectar eliminados
-                        window.productosOriginalesIds = data.productos.map(p => p.id);
+                        window.productosOriginalesIds = data.productos
+                            .map(p => parseInt(p.id) || 0)
+                            .filter(id => id > 0);
+
+                        console.log('Productos cargados:', productosTemporales);
+                        console.log('IDs originales:', window.productosOriginalesIds);
 
                         window.modoEdicion = true;
                         window.pagoEditandoId = id;
@@ -697,30 +711,42 @@
         }
 
         function abrirModalEditarProductos(pagoId) {
+            console.log('Productos temporales:', productosTemporales); // Debug
+
             const modalContent = `
-        <div class="container-fluid">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0"><i class="bi bi-box-seam me-2"></i>Productos del Pedido</h5>
-                <button type="button" class="btn btn-sm btn-success" id="btnAgregarProductoEdit">
-                    <i class="bi bi-plus-circle me-1"></i>Agregar Producto
-                </button>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-bordered table-hover" id="tablaProductosEdit">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Producto</th>
-                            <th width="100">Cantidad</th>
-                            <th width="100">Facturadas</th>
-                            <th width="100">Recibidas</th>
-                            <th width="120">Precio Unitario</th>
-                            <th width="120">Subtotal</th>
-                            <th width="50">Acción</th>
-                        </thead>
-                    <tbody id="tbodyProductosEdit">
-                        ${productosTemporales.length === 0 ?
-                '<tr class="text-muted"><td colspan="7" class="text-center">No hay productos agregados</td></tr>' :
-                productosTemporales.map((prod, index) => `
+    <div class="container-fluid">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0"><i class="bi bi-box-seam me-2"></i>Productos del Pedido</h5>
+            <button type="button" class="btn btn-sm btn-success" id="btnAgregarProductoEdit">
+                <i class="bi bi-plus-circle me-1"></i>Agregar Producto
+            </button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="tablaProductosEdit">
+                <thead class="table-light">
+                    <tr>
+                        <th>Producto</th>
+                        <th width="80">Cantidad</th>
+                        <th width="80">Recibidas</th>
+                        <th width="100">Facturadas</th>
+                        <th width="100">Pendientes</th>
+                        <th width="100">Precio</th>
+                        <th width="100">Subtotal</th>
+                        <th width="180">Facturas</th>
+                        <th width="50">Acción</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyProductosEdit">
+                    ${productosTemporales.length === 0 ?
+                '<tr class="text-muted"><td colspan="9" class="text-center">No hay productos agregados</td></tr>' :
+                productosTemporales.map((prod, index) => {
+                    // USAR DIRECTAMENTE prod.cantidad_recibida
+                    const recibidas = prod.cantidad_recibida || 0;
+                    const facturadas = prod.cantidad_facturada || 0;
+                    const pendientes = prod.cantidad - recibidas;
+                    const pendienteFacturar = prod.cantidad - facturadas;
+
+                    return `
                                 <tr data-index="${index}">
                                     <td>
                                         <strong>${prod.producto_descrip}</strong>
@@ -731,52 +757,71 @@
                                     <td>
                                         <div class="input-group input-group-sm">
                                             <button type="button" class="btn btn-outline-secondary btn-cantidad-menor" data-index="${index}">-</button>
-                                            <input type="number" class="form-control text-center cantidad-edit" data-index="${index}" value="${prod.cantidad}" min="1" style="width: 70px;">
+                                            <input type="number" class="form-control text-center cantidad-edit" data-index="${index}" value="${prod.cantidad}" min="1" style="width: 50px;">
                                             <button type="button" class="btn btn-outline-secondary btn-cantidad-mayor" data-index="${index}">+</button>
                                         </div>
                                     </td>
                                     <td>
-                                        <div class="input-group input-group-sm">
-                                            <button type="button" class="btn btn-outline-secondary btn-facturada-menor" data-index="${index}">-</button>
-                                            <input type="number" class="form-control text-center cantidad-facturada-edit" data-index="${index}" value="${prod.cantidad_facturada || 0}" min="0" max="${prod.cantidad}" style="width: 70px;">
-                                            <button type="button" class="btn btn-outline-secondary btn-facturada-mayor" data-index="${index}">+</button>
-                                        </div>
-                                     </td>
+                                        <span class="badge bg-success">${recibidas}</span>
+                                    </td>
                                     <td>
-                                        <span class="badge bg-secondary">${prod.cantidad_recibida || 0}</span>
-                                     </td>
+                                        <span class="badge bg-primary">${facturadas}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge ${pendientes > 0 ? 'bg-warning' : 'bg-secondary'}">${pendientes}</span>
+                                    </td>
                                     <td>
                                         <div class="input-group input-group-sm">
                                             <span class="input-group-text">$</span>
-                                            <input type="number" class="form-control precio-edit" data-index="${index}" value="${prod.precio_unitario}" step="0.01" min="0" style="width: 100px;">
+                                            <input type="number" class="form-control precio-edit" data-index="${index}" value="${prod.precio_unitario}" step="0.01" min="0" style="width: 80px;">
                                         </div>
-                                     </td>
+                                    </td>
                                     <td class="subtotal-edit" data-index="${index}">$${prod.subtotal.toFixed(2)}</td>
+                                    <td>
+                                        <div class="d-flex flex-column gap-1">
+                                            <button type="button" class="btn btn-sm btn-outline-primary btn-agregar-factura" data-index="${index}" ${pendienteFacturar <= 0 ? 'disabled' : ''}>
+                                                <i class="bi bi-plus-circle me-1"></i> Agregar Factura
+                                            </button>
+                                            ${prod.facturas && prod.facturas.length > 0 ? `
+                                                <button type="button" class="btn btn-sm btn-outline-info btn-ver-facturas" data-index="${index}">
+                                                    <i class="bi bi-list me-1"></i> Ver (${prod.facturas.length})
+                                                </button>
+                                            ` : ''}
+                                        </div>
+                                    </td>
                                     <td class="text-center">
                                         <button type="button" class="btn btn-sm btn-danger btn-eliminar-producto" data-index="${index}" title="Eliminar">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </td>
                                 </tr>
-                            `).join('')
+                            `;
+                }).join('')
             }
-                    </tbody>
-                    <tfoot class="table-secondary">
-                        <tr>
-                            <th colspan="5" class="text-end">Total:</th>
-                            <th id="totalEditPago">$${productosTemporales.reduce((sum, p) => sum + p.subtotal, 0).toFixed(2)}</th>
-                            <th></th>
-                        </tr>
-                    </tfoot>
-                </table>
+                </tbody>
+                <tfoot class="table-secondary">
+                    <tr>
+                        <th colspan="6" class="text-end">Total:</th>
+                        <th id="totalEditPago">$${productosTemporales.reduce((sum, p) => sum + p.subtotal, 0).toFixed(2)}</th>
+                        <th colspan="2"></th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        <hr class="my-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="recargarProductos(true)">
+                    <i class="bi bi-arrow-clockwise me-1"></i> Recargar
+                </button>
             </div>
-            <hr class="my-3">
-            <div class="d-flex justify-content-end gap-2">
+            <div class="d-flex gap-2">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-primary" id="btnGuardarProductosEdit">Guardar Cambios</button>
             </div>
         </div>
-    `;
+    </div>
+`;
 
             document.getElementById('modalTitleText').innerText = 'Editar Productos del Pedido';
             document.getElementById('modalBody').innerHTML = modalContent;
@@ -784,7 +829,9 @@
 
             setTimeout(() => {
                 inicializarEventosEdicion();
+                inicializarEventosFacturas();
                 inicializarTooltips();
+
                 $('#btnAgregarProductoEdit').off('click').on('click', function() {
                     limpiarFormularioProducto();
                     window.modoEdicion = true;
@@ -843,33 +890,26 @@
                 const precio = parseFloat($(`.precio-edit[data-index="${index}"]`).val()) || 0;
                 const nuevoSubtotal = nuevaCantidad * precio;
 
-                // Actualizar el producto en el array
                 if (productosTemporales[index]) {
                     productosTemporales[index].cantidad = nuevaCantidad;
                     productosTemporales[index].subtotal = nuevoSubtotal;
-                    // Actualizar el max del campo facturada
                     $(`.cantidad-facturada-edit[data-index="${index}"]`).attr('max', nuevaCantidad);
-                    // Si la facturada supera la nueva cantidad, ajustarla
                     let facturadaActual = parseInt($(`.cantidad-facturada-edit[data-index="${index}"]`).val()) || 0;
                     if (facturadaActual > nuevaCantidad) {
                         $(`.cantidad-facturada-edit[data-index="${index}"]`).val(nuevaCantidad).trigger('change');
                     }
                 }
 
-                // Actualizar el subtotal en la tabla
                 $(`.subtotal-edit[data-index="${index}"]`).text('$' + nuevoSubtotal.toFixed(2));
-
-                // Actualizar total general
                 actualizarTotalEdit();
             });
 
-            // Evento para cambio de cantidad facturada
+            // Evento para cambio de cantidad facturada - AHORA GUARDA FECHA Y FACTURA
             $('.cantidad-facturada-edit').off('change').on('change', function() {
                 const index = $(this).data('index');
                 const nuevaFacturada = parseInt($(this).val()) || 0;
                 const max = parseInt($(this).attr('max')) || 0;
 
-                // Validar que no exceda la cantidad total
                 if (nuevaFacturada > max) {
                     $(this).val(max);
                     mostrarToast('La cantidad facturada no puede exceder la cantidad total', 'Advertencia', 'warning');
@@ -878,6 +918,50 @@
 
                 if (productosTemporales[index]) {
                     productosTemporales[index].cantidad_facturada = nuevaFacturada;
+
+                    // Si se facturó más de 0, mostrar campos de factura
+                    const facturaInput = $(`.numero-factura-edit[data-index="${index}"]`);
+                    const fechaInput = $(`.fecha-factura-edit[data-index="${index}"]`);
+
+                    if (nuevaFacturada > 0) {
+                        // Si la cantidad facturada es mayor que 0 y no tiene factura, enfocar el campo
+                        if (!facturaInput.val()) {
+                            facturaInput.focus();
+                            mostrarToast('Ingrese el número de factura para las motos facturadas', 'Información', 'info');
+                        }
+                        if (!fechaInput.val()) {
+                            // Sugerir fecha actual si no tiene fecha
+                            if (!fechaInput.val()) {
+                                const today = new Date().toISOString().split('T')[0];
+                                fechaInput.val(today);
+                            }
+                        }
+                        facturaInput.prop('required', true);
+                        fechaInput.prop('required', true);
+                    } else {
+                        // Si no hay cantidad facturada, limpiar campos
+                        facturaInput.val('').prop('required', false);
+                        fechaInput.val('').prop('required', false);
+                        // Limpiar también en el array
+                        productosTemporales[index].numero_factura = '';
+                        productosTemporales[index].fecha_factura = '';
+                    }
+                }
+            });
+
+            // Evento para número de factura
+            $('.numero-factura-edit').off('change').on('change', function() {
+                const index = $(this).data('index');
+                if (productosTemporales[index]) {
+                    productosTemporales[index].numero_factura = $(this).val();
+                }
+            });
+
+            // Evento para fecha de factura
+            $('.fecha-factura-edit').off('change').on('change', function() {
+                const index = $(this).data('index');
+                if (productosTemporales[index]) {
+                    productosTemporales[index].fecha_factura = $(this).val();
                 }
             });
 
@@ -888,16 +972,12 @@
                 const cantidad = parseInt($(`.cantidad-edit[data-index="${index}"]`).val()) || 1;
                 const nuevoSubtotal = cantidad * nuevoPrecio;
 
-                // Actualizar el producto en el array
                 if (productosTemporales[index]) {
                     productosTemporales[index].precio_unitario = nuevoPrecio;
                     productosTemporales[index].subtotal = nuevoSubtotal;
                 }
 
-                // Actualizar el subtotal en la tabla
                 $(`.subtotal-edit[data-index="${index}"]`).text('$' + nuevoSubtotal.toFixed(2));
-
-                // Actualizar total general
                 actualizarTotalEdit();
             });
 
@@ -921,14 +1001,393 @@
             $('#totalEditPago').text('$' + total.toFixed(2));
         }
 
+        function inicializarEventosFacturas() {
+            // Botón para agregar factura
+            $('.btn-agregar-factura').off('click').on('click', function() {
+                const index = $(this).data('index');
+                const producto = productosTemporales[index];
+                if (!producto) return;
+
+                const pendienteFacturar = producto.cantidad - (producto.facturas ? producto.facturas.reduce((sum, f) => sum + f.cantidad_facturada, 0) : 0);
+
+                if (pendienteFacturar <= 0) {
+                    mostrarToast('Este producto ya está completamente facturado', 'Advertencia', 'warning');
+                    return;
+                }
+
+                mostrarModalAgregarFactura(index, pendienteFacturar);
+            });
+
+            // Botón para ver facturas
+            $('.btn-ver-facturas').off('click').on('click', function() {
+                const index = $(this).data('index');
+                const producto = productosTemporales[index];
+                if (!producto || !producto.facturas || producto.facturas.length === 0) return;
+
+                mostrarModalVerFacturas(index);
+            });
+        }
+
+        function mostrarModalAgregarFactura(index, maxCantidad) {
+            const producto = productosTemporales[index];
+            const detalleId = producto.id;
+
+            // Calcular pendiente basado en cantidad_facturada
+            const pendienteFacturar = producto.cantidad - (producto.cantidad_facturada || 0);
+
+            const modalContent = `
+        <div class="container-fluid">
+            <h5 class="mb-3"><i class="bi bi-receipt me-2"></i>Agregar Factura</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Producto:</strong> ${producto.producto_descrip}</p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <p><strong>Ya facturado:</strong> <span class="badge bg-primary">${producto.cantidad_facturada || 0}</span></p>
+                    <p><strong>Disponible para facturar:</strong> <span class="badge bg-warning">${pendienteFacturar}</span></p>
+                </div>
+            </div>
+
+            <form id="formAgregarFactura">
+                <input type="hidden" id="factura_detalle_id" value="${detalleId}">
+                <input type="hidden" id="factura_index" value="${index}">
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">Número de Factura <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="factura_numero" placeholder="Ej: 001-2025" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">Fecha de Factura <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="factura_fecha" value="${new Date().toISOString().split('T')[0]}" required>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">Cantidad a Facturar <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="factura_cantidad" min="1" max="${pendienteFacturar}" value="1" required>
+                        <small class="text-muted">Máximo: ${pendienteFacturar}</small>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">Monto Facturado <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" class="form-control" id="factura_monto" step="0.01" min="0" value="${producto.precio_unitario}" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <label class="form-label fw-bold">Notas</label>
+                        <textarea class="form-control" id="factura_notas" rows="2" placeholder="Observaciones..."></textarea>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <label class="form-label fw-bold">Archivo (PDF/Imagen)</label>
+                        <input type="file" class="form-control" id="factura_archivo" accept=".pdf,.jpg,.jpeg,.png,.gif">
+                        <small class="text-muted">Formatos permitidos: PDF, JPG, PNG, GIF (Máx 10MB)</small>
+                    </div>
+                </div>
+            </form>
+
+            <div id="previewFactura" style="display: none;" class="mt-2">
+                <div class="alert alert-info">
+                    <i class="bi bi-file-earmark-check me-2"></i>
+                    <span id="nombreArchivoFactura"></span>
+                </div>
+            </div>
+
+            <hr>
+            <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnGuardarFactura">
+                    <i class="bi bi-save me-1"></i>Guardar Factura
+                </button>
+            </div>
+        </div>
+    `;
+
+            document.getElementById('modalTitleText').innerHTML = '<i class="bi bi-receipt me-2"></i>Registrar Factura';
+            document.getElementById('modalBody').innerHTML = modalContent;
+            modalPago.show();
+
+            // Eventos...
+            $('#factura_archivo').off('change').on('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const tamanoMB = (file.size / (1024 * 1024)).toFixed(2);
+                    $('#nombreArchivoFactura').text(`${file.name} (${tamanoMB} MB)`);
+                    $('#previewFactura').show();
+                } else {
+                    $('#previewFactura').hide();
+                }
+            });
+
+            $('#btnGuardarFactura').off('click').on('click', function() {
+                guardarFactura();
+            });
+
+            $('#factura_cantidad').off('change').on('change', function() {
+                const max = parseInt($(this).attr('max')) || 0;
+                let valor = parseInt($(this).val()) || 0;
+                if (valor > max) {
+                    $(this).val(max);
+                    mostrarToast(`La cantidad no puede exceder ${max}`, 'Advertencia', 'warning');
+                }
+                if (valor < 1) {
+                    $(this).val(1);
+                }
+            });
+        }
+
+        function guardarFactura() {
+            const detalleId = $('#factura_detalle_id').val();
+            const index = parseInt($('#factura_index').val());
+            const numeroFactura = $('#factura_numero').val().trim();
+            const fechaFactura = $('#factura_fecha').val();
+            const cantidad = parseInt($('#factura_cantidad').val());
+            const monto = parseFloat($('#factura_monto').val());
+            const notas = $('#factura_notas').val();
+            const archivo = $('#factura_archivo')[0].files[0];
+
+            // Validaciones
+            if (!numeroFactura) {
+                mostrarToast('Ingrese el número de factura', 'Error', 'danger');
+                return;
+            }
+            if (!fechaFactura) {
+                mostrarToast('Seleccione la fecha de factura', 'Error', 'danger');
+                return;
+            }
+            if (!cantidad || cantidad < 1) {
+                mostrarToast('Ingrese una cantidad válida', 'Error', 'danger');
+                return;
+            }
+            if (!monto || monto < 0) {
+                mostrarToast('Ingrese un monto válido', 'Error', 'danger');
+                return;
+            }
+
+            mostrarLoading(true);
+
+            const formData = new FormData();
+            formData.append('numero_factura', numeroFactura);
+            formData.append('fecha_factura', fechaFactura);
+            formData.append('cantidad_facturada', cantidad);
+            formData.append('monto_facturado', monto);
+            formData.append('notas', notas);
+            if (archivo) {
+                formData.append('archivo', archivo);
+            }
+
+            fetch(`/pagos-proveedores/detalles/${detalleId}/facturas`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        mostrarToast(data.message, 'Éxito', 'success');
+                        // Recargar el producto con sus facturas actualizadas
+                        recargarProductoConFacturas(index);
+                        $('#modalPago').modal('hide');
+                    } else {
+                        mostrarToast(data.error || 'Error al guardar factura', 'Error', 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    mostrarToast('Error de conexión', 'Error', 'danger');
+                })
+                .finally(() => mostrarLoading(false));
+        }
+
+        function recargarProductoConFacturas(index) {
+            // Recargar los productos desde el servidor
+            const pagoId = pagoActualId;
+            mostrarLoading(true);
+
+            fetch(`/pagos-proveedores/${pagoId}/productos`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Actualizar el array de productos temporales con los datos nuevos
+                        productosTemporales = data.productos;
+
+                        // Mostrar en consola para debug
+                        console.log('Productos recargados:', productosTemporales);
+
+                        // Recargar la vista de edición
+                        abrirModalEditarProductos(pagoId);
+                        mostrarToast('Datos actualizados', 'Éxito', 'success');
+                    } else {
+                        mostrarToast('Error al recargar productos', 'Error', 'danger');
+                    }
+                })
+                .catch(() => {
+                    mostrarToast('Error de conexión', 'Error', 'danger');
+                })
+                .finally(() => mostrarLoading(false));
+        }
+
+        function mostrarModalVerFacturas(index) {
+            const producto = productosTemporales[index];
+            if (!producto || !producto.facturas || producto.facturas.length === 0) {
+                mostrarToast('No hay facturas registradas', 'Información', 'info');
+                return;
+            }
+
+            let html = `
+        <div class="container-fluid">
+            <h5 class="mb-3"><i class="bi bi-receipt me-2"></i>Facturas de "${producto.producto_descrip}"</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>N° Factura</th>
+                            <th>Fecha</th>
+                            <th>Cantidad</th>
+                            <th>Monto</th>
+                            <th>Archivo</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+
+            producto.facturas.forEach((factura, i) => {
+                // Asegurar que los valores sean números
+                const cantidad = parseInt(factura.cantidad_facturada) || 0;
+                const monto = parseFloat(factura.monto_facturado) || 0;
+
+                html += `
+            <tr>
+                <td>${i + 1}</td>
+                <td><strong>${factura.numero_factura || 'N/A'}</strong></td>
+                <td>${factura.fecha_factura || 'N/A'}</td>
+                <td>${cantidad}</td>
+                <td>$${monto.toFixed(2)}</td>
+                <td>
+                    ${factura.archivo_path ? `
+                        <a href="/${factura.archivo_path}" target="_blank" class="btn btn-sm btn-info">
+                            <i class="bi bi-eye"></i> Ver
+                        </a>
+                    ` : 'Sin archivo'}
+                </td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-danger btn-eliminar-factura"
+                            data-factura-id="${factura.id}"
+                            data-pago-id="${pagoActualId}"
+                            data-producto-index="${index}">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+            });
+
+            // Calcular totales con parseFloat para evitar errores
+            const totalCantidad = producto.facturas.reduce((sum, f) => sum + (parseInt(f.cantidad_facturada) || 0), 0);
+            const totalMonto = producto.facturas.reduce((sum, f) => sum + (parseFloat(f.monto_facturado) || 0), 0);
+
+            html += `
+                    </tbody>
+                    <tfoot class="table-secondary">
+                        <tr>
+                            <th colspan="3" class="text-end">Totales:</th>
+                            <th>${totalCantidad}</th>
+                            <th>$${totalMonto.toFixed(2)}</th>
+                            <th colspan="2"></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <hr>
+            <div class="d-flex justify-content-end">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    `;
+
+            document.getElementById('modalTitleText').innerHTML = '<i class="bi bi-receipt me-2"></i>Lista de Facturas';
+            document.getElementById('modalBody').innerHTML = html;
+            modalPago.show();
+
+            // Evento para eliminar factura
+            $('.btn-eliminar-factura').off('click').on('click', function() {
+                const facturaId = $(this).data('factura-id');
+                const pagoId = $(this).data('pago-id');
+                const productoIndex = $(this).data('producto-index');
+
+                if (confirm('¿Está seguro de eliminar esta factura?')) {
+                    eliminarFactura(pagoId, facturaId, productoIndex);
+                }
+            });
+        }
+
+        function eliminarFactura(pagoId, facturaId, productoIndex) {
+            mostrarLoading(true);
+
+            fetch(`/pagos-proveedores/facturas/${facturaId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        mostrarToast(data.message, 'Éxito', 'success');
+                        $('#modalPago').modal('hide');
+                        recargarProductoConFacturas(productoIndex);
+                    } else {
+                        mostrarToast(data.error || 'Error al eliminar', 'Error', 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    mostrarToast('Error de conexión', 'Error', 'danger');
+                })
+                .finally(() => mostrarLoading(false));
+        }
+
         function guardarProductosEdit(pagoId) {
             mostrarLoading(true);
 
-            // Preparar datos para enviar
+            // Validar que si hay cantidad facturada, tenga número de factura y fecha
+            let tieneError = false;
+            productosTemporales.forEach((prod, index) => {
+                if (prod.cantidad_facturada > 0) {
+                    if (!prod.numero_factura || prod.numero_factura.trim() === '') {
+                        mostrarToast(`El producto "${prod.producto_descrip}" tiene cantidad facturada pero no tiene número de factura`, 'Error', 'danger');
+                        tieneError = true;
+                        return;
+                    }
+                    if (!prod.fecha_factura) {
+                        mostrarToast(`El producto "${prod.producto_descrip}" tiene cantidad facturada pero no tiene fecha de factura`, 'Error', 'danger');
+                        tieneError = true;
+                        return;
+                    }
+                }
+            });
+
+            if (tieneError) {
+                mostrarLoading(false);
+                return;
+            }
+
             const productosActualizar = productosTemporales.filter(p => p.id && !p.es_nuevo).map(p => ({
                 id: p.id,
                 cantidad: p.cantidad,
                 cantidad_facturada: p.cantidad_facturada,
+                numero_factura: p.numero_factura || null,
+                fecha_factura: p.fecha_factura || null,
                 precio_unitario: p.precio_unitario
             }));
 
@@ -938,12 +1397,10 @@
                 producto_descrip: p.producto_descrip,
                 cantidad: p.cantidad,
                 cantidad_facturada: p.cantidad_facturada,
+                numero_factura: p.numero_factura || null,
+                fecha_factura: p.fecha_factura || null,
                 precio_unitario: p.precio_unitario
             }));
-
-            // NUEVO: Calcular productos eliminados
-            const idsActuales = productosTemporales.filter(p => p.id).map(p => p.id);
-            const productosEliminar = (window.productosOriginalesIds || []).filter(id => !idsActuales.includes(id));
 
             fetch(`/pagos-proveedores/${pagoId}/productos`, {
                 method: 'PUT',
@@ -954,8 +1411,7 @@
                 },
                 body: JSON.stringify({
                     productos_actualizar: productosActualizar,
-                    productos_nuevos: productosNuevos,
-                    productos_eliminar: productosEliminar  // NUEVO
+                    productos_nuevos: productosNuevos
                 })
             })
                 .then(response => response.json())
@@ -1164,6 +1620,9 @@
                 producto_codprod: productoCodprod,
                 producto_descrip: productoDescrip,
                 cantidad: cantidad,
+                cantidad_recibida: 0,
+                cantidad_facturada: 0, // ← Inicializar en 0
+                facturas: [],
                 precio_unitario: precio,
                 subtotal: subtotal
             });
@@ -1208,6 +1667,54 @@
             producto.subtotal = producto.cantidad * producto.precio_unitario;
 
             actualizarTablaProductos();
+        }
+
+        function recargarProductos(recargarModal = true) {
+            const pagoId = pagoActualId;
+            if (!pagoId) return;
+
+            mostrarLoading(true);
+
+            fetch(`/pagos-proveedores/${pagoId}/productos`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        productosTemporales = data.productos.map(p => ({
+                            producto_id: p.producto_id,
+                            producto_codprod: p.producto_codprod || '',
+                            producto_descrip: p.producto_descrip || '',
+                            cantidad: parseInt(p.cantidad) || 0,
+                            cantidad_recibida: parseInt(p.cantidad_recibida) || 0,
+                            cantidad_facturada: parseInt(p.cantidad_facturada) || 0,
+                            facturas: (p.facturas || []).map(f => ({
+                                id: parseInt(f.id) || 0,
+                                numero_factura: f.numero_factura || '',
+                                fecha_factura: f.fecha_factura || '',
+                                cantidad_facturada: parseInt(f.cantidad_facturada) || 0,
+                                monto_facturado: parseFloat(f.monto_facturado) || 0,
+                                archivo_path: f.archivo_path || null
+                            })),
+                            precio_unitario: parseFloat(p.precio_unitario) || 0,
+                            subtotal: parseFloat(p.subtotal) || 0,
+                            id: parseInt(p.id) || 0
+                        }));
+
+                        console.log('✅ Productos recargados:', productosTemporales);
+
+                        if (recargarModal) {
+                            abrirModalEditarProductos(pagoId);
+                        }
+
+                        mostrarToast('Datos actualizados correctamente', 'Éxito', 'success');
+                    } else {
+                        mostrarToast('Error al recargar productos', 'Error', 'danger');
+                    }
+                })
+                .catch((error) => {
+                    console.error('Error al recargar:', error);
+                    mostrarToast('Error de conexión', 'Error', 'danger');
+                })
+                .finally(() => mostrarLoading(false));
         }
 
         function actualizarTablaProductos() {
@@ -1400,9 +1907,10 @@
         // Limpiar al cerrar el modal
         $('#modalPago').on('hidden.bs.modal', function () {
             productosTemporales = [];
-            window.productosOriginalesIds = [];  // NUEVO: limpiar
-            window.modoEdicion = false;          // NUEVO: limpiar
-            window.pagoEditandoId = null;        // NUEVO: limpiar
+            window.productosOriginalesIds = [];  // NUEVO: limpiar IDs originales
+            window.modoEdicion = false;          // NUEVO: limpiar modo edición
+            window.pagoEditandoId = null;        // NUEVO: limpiar pago editando
+            window.productoEditIndex = undefined; // NUEVO: limpiar índice de edición
             $('#formCrearPago')[0]?.reset();
             $('#seccionProductos').hide();
             $('#btnGuardarPago').prop('disabled', true);
@@ -1664,7 +2172,6 @@
             const numeroGuia = $('#numero_guia').val();
             const notas = $('#notas_despacho').val();
 
-            // Obtener productos seleccionados
             const productos = [];
             $('.checkbox-producto:checked').each(function() {
                 const detalleId = $(this).val();
@@ -1708,7 +2215,15 @@
                     if (data.success) {
                         mostrarToast(data.message, 'Éxito', 'success');
                         $('#modalPago').modal('hide');
-                        setTimeout(() => location.reload(), 1500);
+
+                        // RECARGAR PRODUCTOS DESPUÉS DE LA RECEPCIÓN
+                        setTimeout(() => {
+                            recargarProductos(false); // Recargar sin abrir modal
+                            // Abrir nuevamente el modal de edición
+                            setTimeout(() => {
+                                agregarProductos(pagoActualId);
+                            }, 500);
+                        }, 500);
                     } else {
                         mostrarToast(data.error || 'Error al registrar recepción', 'Error', 'danger');
                     }
