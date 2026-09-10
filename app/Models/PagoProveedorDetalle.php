@@ -16,7 +16,7 @@ class PagoProveedorDetalle extends Model
         'producto_descrip',
         'cantidad',
         'cantidad_recibida',
-        'cantidad_facturada',
+        'cantidad_facturada',  // ← Este campo se mantiene
         'precio_unitario',
         'subtotal'
     ];
@@ -40,6 +40,12 @@ class PagoProveedorDetalle extends Model
             ->where('comercial', '=',3);
     }
 
+    // Relación con facturas (historial)
+    public function facturas()
+    {
+        return $this->hasMany(FacturaProveedor::class, 'pago_detalle_id');
+    }
+
     public function getPendienteAttribute()
     {
         return $this->cantidad - $this->cantidad_recibida;
@@ -48,6 +54,12 @@ class PagoProveedorDetalle extends Model
     public function getPendienteFacturarAttribute()
     {
         return $this->cantidad - $this->cantidad_facturada;
+    }
+
+    // Verificar si ya está completamente facturado
+    public function getEstaCompletamenteFacturadoAttribute()
+    {
+        return $this->cantidad_facturada >= $this->cantidad;
     }
 
     protected static function boot()
