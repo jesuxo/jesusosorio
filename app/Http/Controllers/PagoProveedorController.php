@@ -208,12 +208,26 @@ class PagoProveedorController extends Controller
         DB::beginTransaction();
 
         try {
+            // NUEVO: Eliminar productos que ya no están
+            if ($request->has('productos_eliminar') && is_array($request->productos_eliminar)) {
+                foreach ($request->productos_eliminar as $detalleId) {
+                    $detalle = PagoProveedorDetalle::find($detalleId);
+                    if ($detalle && $detalle->pago_id == $pago->id) {
+                        // Opcional: validar que no tenga unidades recibidas
+                        if ($detalle->cantidad_recibida > 0) {
+                            throw new \Exception("No se puede eliminar el producto {$detalle->producto_descrip} porque ya tiene unidades recibidas");
+                        }
+                        $detalle->delete();
+                    }
+                }
+            }
+
             // Actualizar productos existentes
             foreach ($request->productos_actualizar as $producto) {
                 $detalle = PagoProveedorDetalle::find($producto['id']);
                 if ($detalle && $detalle->pago_id == $pago->id) {
                     $detalle->cantidad = $producto['cantidad'];
-                    $detalle->cantidad_facturada = $producto['cantidad_facturada'] ?? 0; // Nuevo campo
+                    $detalle->cantidad_facturada = $producto['cantidad_facturada'] ?? 0;
                     $detalle->precio_unitario = $producto['precio_unitario'];
                     $detalle->subtotal = $producto['cantidad'] * $producto['precio_unitario'];
                     $detalle->save();
@@ -222,7 +236,7 @@ class PagoProveedorController extends Controller
 
             // Crear nuevos productos
             foreach ($request->productos_nuevos as $producto) {
-                $prod = Saprod::where('codprod',$producto['producto_codprod'])->where('comercial',1)->first();
+                $prod = Saprod::where('codprod', $producto['producto_codprod'])->where('comercial', 1)->first();
 
                 PagoProveedorDetalle::create([
                     'pago_id'           => $pago->id,
@@ -231,7 +245,7 @@ class PagoProveedorController extends Controller
                     'producto_descrip'  => $producto['producto_descrip'],
                     'cantidad'          => $producto['cantidad'],
                     'cantidad_recibida' => 0,
-                    'cantidad_facturada' => $producto['cantidad_facturada'] ?? 0, // Nuevo campo
+                    'cantidad_facturada' => $producto['cantidad_facturada'] ?? 0,
                     'precio_unitario'   => $producto['precio_unitario'],
                     'subtotal'          => $producto['cantidad'] * $producto['precio_unitario']
                 ]);

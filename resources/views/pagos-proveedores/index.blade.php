@@ -672,19 +672,21 @@
                             producto_codprod: p.producto_codprod,
                             producto_descrip: p.producto_descrip,
                             cantidad: p.cantidad,
-                            cantidad_facturada: p.cantidad_facturada || 0, // AGREGADO
+                            cantidad_facturada: p.cantidad_facturada || 0,
                             precio_unitario: p.precio_unitario,
                             subtotal: p.cantidad * p.precio_unitario,
                             id: p.id
                         }));
 
-                        // IMPORTANTE: Activar modo edición ANTES de abrir el modal
+                        // NUEVO: Guardar IDs originales para detectar eliminados
+                        window.productosOriginalesIds = data.productos.map(p => p.id);
+
                         window.modoEdicion = true;
                         window.pagoEditandoId = id;
 
                         abrirModalEditarProductos(id);
                         setTimeout(() => {
-                            inicializarTooltips(); // Agregar esta línea después de abrir el modal
+                            inicializarTooltips();
                         }, 200);
                     } else {
                         mostrarToast('Error al cargar productos', 'Error', 'danger');
@@ -926,7 +928,7 @@
             const productosActualizar = productosTemporales.filter(p => p.id && !p.es_nuevo).map(p => ({
                 id: p.id,
                 cantidad: p.cantidad,
-                cantidad_facturada: p.cantidad_facturada , // Incluir cantidad facturada
+                cantidad_facturada: p.cantidad_facturada,
                 precio_unitario: p.precio_unitario
             }));
 
@@ -935,9 +937,13 @@
                 producto_codprod: p.producto_codprod,
                 producto_descrip: p.producto_descrip,
                 cantidad: p.cantidad,
-                cantidad_facturada: p.cantidad_facturada, // Incluir cantidad facturada
+                cantidad_facturada: p.cantidad_facturada,
                 precio_unitario: p.precio_unitario
             }));
+
+            // NUEVO: Calcular productos eliminados
+            const idsActuales = productosTemporales.filter(p => p.id).map(p => p.id);
+            const productosEliminar = (window.productosOriginalesIds || []).filter(id => !idsActuales.includes(id));
 
             fetch(`/pagos-proveedores/${pagoId}/productos`, {
                 method: 'PUT',
@@ -948,7 +954,8 @@
                 },
                 body: JSON.stringify({
                     productos_actualizar: productosActualizar,
-                    productos_nuevos: productosNuevos
+                    productos_nuevos: productosNuevos,
+                    productos_eliminar: productosEliminar  // NUEVO
                 })
             })
                 .then(response => response.json())
@@ -1393,6 +1400,9 @@
         // Limpiar al cerrar el modal
         $('#modalPago').on('hidden.bs.modal', function () {
             productosTemporales = [];
+            window.productosOriginalesIds = [];  // NUEVO: limpiar
+            window.modoEdicion = false;          // NUEVO: limpiar
+            window.pagoEditandoId = null;        // NUEVO: limpiar
             $('#formCrearPago')[0]?.reset();
             $('#seccionProductos').hide();
             $('#btnGuardarPago').prop('disabled', true);
