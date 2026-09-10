@@ -130,6 +130,7 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{id}', [PagoProveedorController::class, 'update'])->name('update');
         Route::delete('/{id}', [PagoProveedorController::class, 'destroy'])->name('destroy');
 
+
         Route::get('/productos/{id}/precio', [PagoProveedorController::class, 'getPrecio'])->name('getPrecio');
 
         Route::get('/{id}/productos', [PagoProveedorController::class, 'getProductos'])->name('productos.get');
@@ -159,6 +160,12 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{id}/asignar-aprobacion', [PagoProveedorController::class, 'asignarAprobacion'])->name('asignar-aprobacion');
         Route::post('/{id}/editar-aprobacion', [PagoProveedorController::class, 'editarAprobacion'])->name('editar-aprobacion');
 
+        Route::get('/{id}/facturas', [PagoProveedorController::class, 'getFacturas'])->name('facturas.index');
+        Route::post('/detalles/{detalleId}/facturas', [PagoProveedorController::class, 'agregarFactura'])->name('facturas.agregar');
+        Route::delete('/facturas/{facturaId}', [PagoProveedorController::class, 'eliminarFactura'])->name('facturas.eliminar');
+
+
+        Route::get('/exportar-facturas', [PagoProveedorController::class, 'exportarReporteFacturas'])->name('exportar-facturas');
     });
 
     Route::get('/motosporfecha', [PagoProveedorController::class, 'motosPorFecha'])->name('motosPorFecha');
