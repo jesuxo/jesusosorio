@@ -204,6 +204,9 @@
                                 <li class="nav-item ">
                                     <a href="{{ route('pagos-proveedores.index') }}" class="nav-link" data-key="t-list-view">Motos</a>
                                 </li>
+                                <li class="nav-item ">
+                                    <a href="{{ route('reporte-facturas') }}" class="nav-link" data-key="t-list-view">Reporte de Facturas</a>
+                                </li>
                             </ul>
                         </div>
                     </li>

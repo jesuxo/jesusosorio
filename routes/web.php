@@ -110,12 +110,9 @@ Route::middleware(['auth'])->group(function () {
         ->name('comerciales.disponibles');
 });
 
-
-
 Route::middleware(['auth'])->group(function () {
 
-
-// routes/web.php
+    Route::get('/pagos-proveedores/reporte-facturas', [PagoProveedorController::class, 'reporteFacturas'])->name('reporte-facturas');
 
     Route::prefix('pagos-proveedores')->name('pagos-proveedores.')->middleware(['auth'])->group(function () {
         Route::get('/', [PagoProveedorController::class, 'index'])->name('index');
