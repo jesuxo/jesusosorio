@@ -89,7 +89,7 @@
             <div class="card-header bg-warning text-dark d-flex justify-content-between">
                 <h6 class="mb-0">
                     <i class="bi bi-truck me-2"></i>
-                    <strong>RESUMEN DE MODELOS PENDIENTES POR RECIBIR</strong>
+                    <strong>RESUMEN DE MODELOS </strong>
                     <span class="badge bg-dark ms-2">
                     {{ count($modelosPendientes) }} modelos |
                     {{ number_format($estadisticas['total_unidades_pendientes'] ?? 0, 0, ',', '.') }} unidades

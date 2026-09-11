@@ -899,11 +899,14 @@ class PagoProveedorController extends Controller
             $incluir = false;
             if ($tipo == 'pendientes' && $diferencia > 0) {
                 $incluir = true;
+                die('1');
             } elseif ($tipo == 'completos' && $estaPagado && $tieneMotosPendientes) {
                 // SOLO pedidos pagados que aún tienen motos por recibir
                 $incluir = true;
+                die('2');
             } elseif ($tipo == 'todos') {
                 $incluir = true;
+                die('3');
             }
 
             if ($incluir) {
