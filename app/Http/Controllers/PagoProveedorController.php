@@ -887,7 +887,7 @@ class PagoProveedorController extends Controller
 
         foreach ($pagos as $pago) {
             $totalComprobantes = $pago->comprobantes->sum('monto');
-            $diferencia = $pago->monto_total - $totalComprobantes;
+            $diferencia = number_format($pago->monto_total - $totalComprobantes,2,'.','');
 
             // Verificar si el pedido está pagado (comprobantes cubren el monto total)
             $estaPagado = $totalComprobantes >= $pago->monto_total;
